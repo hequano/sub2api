@@ -21,7 +21,8 @@ type capVerifier struct {
 func NewCapVerifier() service.CapVerifier {
 	sharedClient, err := httpclient.GetClient(httpclient.Options{
 		Timeout:            10 * time.Second,
-		ValidateResolvedIP: true,
+		ValidateResolvedIP: false,
+		AllowPrivateHosts:  true,
 	})
 	if err != nil {
 		sharedClient = &http.Client{Timeout: 10 * time.Second}

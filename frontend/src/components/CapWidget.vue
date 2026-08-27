@@ -1,11 +1,18 @@
 <template>
   <div v-if="siteKey && apiEndpoint" class="cap-widget-wrapper">
-    <div ref="containerRef" class="cap-widget-container"></div>
+    <component
+      :is="'cap-widget'"
+      ref="widgetRef"
+      :data-cap-api-endpoint="resolvedEndpoint"
+      @solve="handleSolve"
+      @error="handleError"
+      @reset="handleReset"
+    ></component>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -26,12 +33,9 @@ const emit = defineEmits<{
 
 const SCRIPT_SRC = 'https://cdn.jsdelivr.net/npm/cap-widget'
 
-const containerRef = ref<HTMLElement | null>(null)
-let widgetEl: HTMLElement | null = null
+const widgetRef = ref<HTMLElement | null>(null)
 const scriptLoaded = ref(false)
-
 let cachedToken: string | null = null
-let pending: { resolve: (token: string | null) => void } | null = null
 
 const resolvedEndpoint = computed(() => {
   let endpoint = props.apiEndpoint.trim()
@@ -64,6 +68,11 @@ const loadScript = (): Promise<void> => {
       `script[src*="cap-widget"]`
     )
     if (existingScript) {
+      if (customElements.get('cap-widget')) {
+        scriptLoaded.value = true
+        resolve()
+        return
+      }
       existingScript.addEventListener('load', () => {
         scriptLoaded.value = true
         resolve()
@@ -76,7 +85,6 @@ const loadScript = (): Promise<void> => {
 
     const script = document.createElement('script')
     script.src = SCRIPT_SRC
-    script.type = 'module'
     script.async = true
     script.onload = () => {
       scriptLoaded.value = true
@@ -95,23 +103,14 @@ const handleSolve = (e: Event) => {
   if (token) {
     cachedToken = token
     emit('verify', token)
-    if (pending) {
-      const current = pending
-      pending = null
-      current.resolve(token)
-    }
   }
 }
 
 const handleError = (e: Event) => {
   const customEvent = e as CustomEvent<{ message?: string }>
   console.error('[Cap] Widget error:', customEvent.detail?.message)
+  cachedToken = null
   emit('error')
-  if (pending) {
-    const current = pending
-    pending = null
-    current.resolve(null)
-  }
 }
 
 const handleReset = () => {
@@ -119,52 +118,15 @@ const handleReset = () => {
   emit('expire')
 }
 
-const attachWidgetListeners = (element: HTMLElement | null) => {
-  if (!element) return
-  element.addEventListener('solve', handleSolve)
-  element.addEventListener('error', handleError)
-  element.addEventListener('reset', handleReset)
-}
-
-const detachWidgetListeners = (element: HTMLElement | null) => {
-  if (!element) return
-  element.removeEventListener('solve', handleSolve)
-  element.removeEventListener('error', handleError)
-  element.removeEventListener('reset', handleReset)
-}
-
-const renderWidget = () => {
-  if (!containerRef.value || !scriptLoaded.value || !resolvedEndpoint.value) {
-    return
-  }
-
-  if (widgetEl) {
-    detachWidgetListeners(widgetEl)
-    widgetEl.remove()
-    widgetEl = null
-  }
-
-  const el = document.createElement('cap-widget')
-  el.setAttribute('data-cap-api-endpoint', resolvedEndpoint.value)
-  attachWidgetListeners(el)
-  containerRef.value.appendChild(el)
-  widgetEl = el
-}
-
 const reset = () => {
   cachedToken = null
-  if (pending) {
-    const current = pending
-    pending = null
-    current.resolve(null)
-  }
-  if (widgetEl) {
-    const customEl = widgetEl as HTMLElement & { reset?: () => void }
+  if (widgetRef.value) {
+    const customEl = widgetRef.value as HTMLElement & { reset?: () => void }
     if (typeof customEl.reset === 'function') {
       try {
         customEl.reset()
       } catch {
-        // Ignore reset failures on custom elements
+        // Ignore reset failures
       }
     }
   }
@@ -177,47 +139,34 @@ const verify = async (): Promise<string | null> => {
   if (!scriptLoaded.value) {
     try {
       await loadScript()
-      await nextTick()
-      renderWidget()
     } catch {
       return null
     }
   }
-  return new Promise<string | null>((resolve) => {
-    pending = { resolve }
-    if (widgetEl) {
-      const customEl = widgetEl as HTMLElement & { solve?: () => Promise<{ token?: string }> }
-      if (typeof customEl.solve === 'function') {
-        customEl
-          .solve()
-          .then((res) => {
-            if (res?.token) {
-              cachedToken = res.token
-              emit('verify', res.token)
-              if (pending) {
-                const current = pending
-                pending = null
-                current.resolve(res.token)
-              }
-            }
-          })
-          .catch(() => {
-            if (pending) {
-              const current = pending
-              pending = null
-              current.resolve(null)
-            }
-          })
+  // Programmatic solve fallback using Cap class if available
+  const CapConstructor = (window as unknown as { Cap?: new (opts: { apiEndpoint: string }) => { solve: () => Promise<{ token?: string }> } }).Cap
+  if (typeof CapConstructor === 'function' && resolvedEndpoint.value) {
+    try {
+      const solver = new CapConstructor({ apiEndpoint: resolvedEndpoint.value })
+      const res = await solver.solve()
+      if (res?.token) {
+        cachedToken = res.token
+        emit('verify', res.token)
+        return res.token
       }
+    } catch (err) {
+      console.error('[Cap] Programmatic solve failed:', err)
+      return null
     }
-  })
+  }
+  return null
 }
 
-defineExpose({ verify, reset })
+const getToken = (): string | null => {
+  return cachedToken
+}
 
-watch([scriptLoaded, resolvedEndpoint, containerRef], () => {
-  renderWidget()
-})
+defineExpose({ verify, reset, getToken })
 
 onMounted(async () => {
   if (!props.siteKey || !props.apiEndpoint) {
@@ -226,8 +175,6 @@ onMounted(async () => {
 
   try {
     await loadScript()
-    await nextTick()
-    renderWidget()
   } catch (error) {
     console.error('Failed to initialize Cap widget:', error)
     emit('error')
@@ -235,34 +182,18 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (widgetEl) {
-    detachWidgetListeners(widgetEl)
-    widgetEl.remove()
-    widgetEl = null
-  }
-  if (pending) {
-    const current = pending
-    pending = null
-    current.resolve(null)
-  }
+  cachedToken = null
 })
 </script>
 
 <style scoped>
 .cap-widget-wrapper {
   width: 100%;
+  margin: 0.5rem 0;
 }
 
-.cap-widget-container {
+.cap-widget-wrapper :deep(cap-widget) {
+  display: block;
   width: 100%;
-  min-height: 65px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.cap-widget-container :deep(cap-widget) {
-  width: 100%;
-  max-width: 100%;
 }
 </style>

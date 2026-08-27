@@ -240,7 +240,7 @@
         <!-- Submit Button -->
         <button
           type="submit"
-          :disabled="registrationActionDisabled || (turnstileEnabled && !turnstileToken)"
+          :disabled="registrationActionDisabled || (inlineCaptchaEnabled && !turnstileToken)"
           class="btn btn-primary w-full"
         >
           <svg
@@ -438,16 +438,19 @@ const capReady = computed(
     Boolean(capApiEndpoint.value) &&
     Boolean(capSiteKey.value)
 )
-// 动作触发式验证码（腾讯/阿里云/Cap）：提交、OAuth 启动时弹窗验证
+const inlineCaptchaEnabled = computed(
+  () =>
+    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) ||
+    capReady.value
+)
+// 动作触发式验证码（腾讯/阿里云）：提交、OAuth 启动时弹窗验证
 const actionCaptchaEnabled = computed(
   () =>
     (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) ||
-    aliyunCaptchaReady.value ||
-    capReady.value
+    aliyunCaptchaReady.value
 )
 const captchaEnabled = computed(
-  () =>
-    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) || actionCaptchaEnabled.value
+  () => inlineCaptchaEnabled.value || actionCaptchaEnabled.value
 )
 
 // Promo code validation
@@ -944,8 +947,8 @@ function validateForm(): boolean {
     }
   }
 
-  // Turnstile validation
-  if (turnstileEnabled.value && !turnstileToken.value) {
+  // Inline Captcha (Turnstile / Cap) validation
+  if (inlineCaptchaEnabled.value && !turnstileToken.value) {
     errors.turnstile = t('auth.completeVerification')
     isValid = false
   }
@@ -1023,7 +1026,9 @@ async function handleRegister(): Promise<void> {
           email: formData.email,
           password: formData.password,
           turnstile_token:
-            turnstileEnabled.value || aliyunCaptchaEnabled.value ? turnstileToken.value : undefined,
+            turnstileEnabled.value || aliyunCaptchaEnabled.value || capEnabled.value
+              ? turnstileToken.value
+              : undefined,
           tencent_captcha_ticket: tencentCaptchaEnabled.value ? turnstileToken.value : undefined,
           tencent_captcha_randstr: tencentCaptchaEnabled.value ? tencentCaptchaRandstr.value : undefined,
           promo_code: formData.promo_code || undefined,
@@ -1042,7 +1047,9 @@ async function handleRegister(): Promise<void> {
       email: formData.email,
       password: formData.password,
       turnstile_token:
-        turnstileEnabled.value || aliyunCaptchaEnabled.value ? turnstileToken.value : undefined,
+        turnstileEnabled.value || aliyunCaptchaEnabled.value || capEnabled.value
+          ? turnstileToken.value
+          : undefined,
       tencent_captcha_ticket: tencentCaptchaEnabled.value ? turnstileToken.value : undefined,
       tencent_captcha_randstr: tencentCaptchaEnabled.value ? tencentCaptchaRandstr.value : undefined,
       promo_code: formData.promo_code || undefined,
