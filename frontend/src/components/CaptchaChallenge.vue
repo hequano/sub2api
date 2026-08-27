@@ -1,17 +1,12 @@
 <template>
-  <TurnstileWidget
-    v-if="turnstileEnabled && turnstileSiteKey"
-    ref="turnstileRef"
-    :site-key="turnstileSiteKey"
-    @verify="(token) => emit('verify', token, '')"
+  <CapWidget
+    v-if="capEnabled && capApiEndpoint && capSiteKey"
+    ref="capRef"
+    :api-endpoint="capApiEndpoint"
+    :site-key="capSiteKey"
+    @verify="(token: string) => emit('verify', token, '')"
     @expire="emit('expire')"
     @error="emit('error')"
-  />
-  <TencentCaptchaGate
-    v-else-if="tencentEnabled && tencentAppId"
-    ref="tencentRef"
-    :app-id="tencentAppId"
-    :region="tencentRegion"
   />
   <AliyunCaptchaWidget
     v-else-if="aliyunEnabled && aliyunSceneId && aliyunPrefix"
@@ -23,12 +18,17 @@
     @expire="emit('expire')"
     @error="emit('error')"
   />
-  <CapWidget
-    v-else-if="capEnabled && capApiEndpoint && capSiteKey"
-    ref="capRef"
-    :api-endpoint="capApiEndpoint"
-    :site-key="capSiteKey"
-    @verify="(token: string) => emit('verify', token, '')"
+  <TencentCaptchaGate
+    v-else-if="tencentEnabled && tencentAppId"
+    ref="tencentRef"
+    :app-id="tencentAppId"
+    :region="tencentRegion"
+  />
+  <TurnstileWidget
+    v-else-if="turnstileEnabled && turnstileSiteKey"
+    ref="turnstileRef"
+    :site-key="turnstileSiteKey"
+    @verify="(token) => emit('verify', token, '')"
     @expire="emit('expire')"
     @error="emit('error')"
   />

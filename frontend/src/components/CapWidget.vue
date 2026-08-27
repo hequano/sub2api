@@ -1,18 +1,11 @@
 <template>
   <div v-if="siteKey && apiEndpoint" class="cap-widget-wrapper">
-    <component
-      :is="'cap-widget'"
-      ref="widgetRef"
-      :data-cap-api-endpoint="resolvedEndpoint"
-      @solve="handleSolve"
-      @error="handleError"
-      @reset="handleReset"
-    ></component>
+    <div ref="containerRef" class="cap-widget-container"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import 'cap-widget'
 import Cap, { type CapWidget as CapWidgetElement } from 'cap-widget'
 
@@ -33,7 +26,8 @@ const emit = defineEmits<{
   (e: 'error'): void
 }>()
 
-const widgetRef = ref<CapWidgetElement | null>(null)
+const containerRef = ref<HTMLElement | null>(null)
+let widgetElement: CapWidgetElement | null = null
 let cachedToken: string | null = null
 
 const resolvedEndpoint = computed(() => {
@@ -76,11 +70,34 @@ const handleReset = () => {
   emit('expire')
 }
 
+const renderWidget = () => {
+  if (!containerRef.value || !resolvedEndpoint.value) {
+    return
+  }
+
+  // Clear previous widget
+  containerRef.value.innerHTML = ''
+  cachedToken = null
+
+  const el = document.createElement('cap-widget') as CapWidgetElement
+  el.setAttribute('data-cap-api-endpoint', resolvedEndpoint.value)
+  if (props.theme) {
+    el.setAttribute('data-cap-theme', props.theme)
+  }
+
+  el.addEventListener('solve', handleSolve)
+  el.addEventListener('error', handleError)
+  el.addEventListener('reset', handleReset)
+
+  widgetElement = el
+  containerRef.value.appendChild(el)
+}
+
 const reset = () => {
   cachedToken = null
-  if (widgetRef.value) {
+  if (widgetElement) {
     try {
-      widgetRef.value.reset()
+      widgetElement.reset()
     } catch {
       // Ignore reset failures
     }
@@ -114,8 +131,29 @@ const getToken = (): string | null => {
 
 defineExpose({ verify, reset, getToken })
 
+watch(
+  () => [props.apiEndpoint, props.siteKey],
+  () => {
+    nextTick(() => {
+      renderWidget()
+    })
+  }
+)
+
+onMounted(() => {
+  nextTick(() => {
+    renderWidget()
+  })
+})
+
 onUnmounted(() => {
   cachedToken = null
+  if (widgetElement) {
+    widgetElement.removeEventListener('solve', handleSolve)
+    widgetElement.removeEventListener('error', handleError)
+    widgetElement.removeEventListener('reset', handleReset)
+    widgetElement = null
+  }
 })
 </script>
 
@@ -128,7 +166,13 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-.cap-widget-wrapper :deep(cap-widget) {
+.cap-widget-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.cap-widget-container :deep(cap-widget) {
   display: block;
   width: 100%;
 }
