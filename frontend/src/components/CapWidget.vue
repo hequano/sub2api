@@ -122,7 +122,10 @@ onUnmounted(() => {
 <style scoped>
 .cap-widget-wrapper {
   width: 100%;
+  min-height: 65px;
   margin: 0.5rem 0;
+  display: flex;
+  justify-content: center;
 }
 
 .cap-widget-wrapper :deep(cap-widget) {
