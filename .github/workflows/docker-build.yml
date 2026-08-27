@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: 'Target platforms (comma-separated, e.g. linux/amd64 or linux/amd64,linux/arm64)'
+        description: 'Target platforms (e.g. linux/amd64 or linux/amd64,linux/arm64)'
         required: false
         default: 'linux/amd64'
         type: string
@@ -50,7 +50,6 @@ jobs:
             type=raw,value=custom
             type=raw,value=latest
             type=sha,prefix=sha-,format=short
-            type=raw,value={{date 'YYYYMMDD'}}
 
       - name: Determine platforms
         id: platforms
@@ -75,11 +74,11 @@ jobs:
           build-args: |
             COMMIT=${{ github.sha }}
 
-  # 可选：如果配置了服务器 SSH 凭证，会自动触发服务器拉取更新
+  # 可选：如果配置了 vars.SSH_HOST 变量，会自动触发服务器拉取更新
   deploy-via-ssh:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: ${{ vars.SSH_HOST != '' && secrets.SSH_KEY != '' }}
+    if: ${{ vars.SSH_HOST != '' }}
     steps:
       - name: Deploy to Server via SSH
         uses: appleboy/ssh-action@v1.2.0
