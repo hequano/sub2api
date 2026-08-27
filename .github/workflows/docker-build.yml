@@ -73,22 +73,3 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             COMMIT=${{ github.sha }}
-
-  # 可选：如果配置了 vars.SSH_HOST 变量，会自动触发服务器拉取更新
-  deploy-via-ssh:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: ${{ vars.SSH_HOST != '' }}
-    steps:
-      - name: Deploy to Server via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ vars.SSH_HOST }}
-          username: ${{ vars.SSH_USER || 'root' }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ vars.SSH_PORT || 22 }}
-          script: |
-            cd ${{ vars.DEPLOY_DIR || '/opt/sub2api' }}
-            docker compose pull
-            docker compose up -d
-            docker image prune -f
