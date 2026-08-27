@@ -186,3 +186,70 @@ func TestVerifyActionCaptchaIfEnabledFailsClosedOnSettingReadError(t *testing.T)
 
 	require.ErrorIs(t, err, ErrServiceUnavailable)
 }
+
+func capCaptchaSettings() map[string]string {
+	return map[string]string{
+		SettingKeyCapEnabled:     "true",
+		SettingKeyCapApiEndpoint: "https://cap.example.com",
+		SettingKeyCapSiteKey:     "cap-site-key",
+		SettingKeyCapSecretKey:   "cap-secret-key",
+	}
+}
+
+func TestVerifyCaptchaUsesCapWhenEnabled(t *testing.T) {
+	verifier := &capVerifierStub{response: &CapVerifyResponse{Success: true}}
+	cfg := &config.Config{
+		Server: config.ServerConfig{Mode: "release"},
+	}
+	settingService := NewSettingService(&settingRepoStub{values: capCaptchaSettings()}, cfg)
+	svc := NewAuthService(nil, &userRepoStub{}, nil, nil, cfg, settingService, nil, nil, nil, nil, nil, nil, nil)
+	svc.SetCapService(NewCapService(settingService, verifier))
+
+	err := svc.VerifyCaptcha(context.Background(), CaptchaProof{
+		TurnstileToken: "valid-cap-token",
+	}, "203.0.113.10")
+
+	require.NoError(t, err)
+	require.Equal(t, 1, verifier.called)
+	require.Equal(t, "valid-cap-token", verifier.token)
+}
+
+func TestVerifyCaptchaRejectsCapWithTurnstileConflict(t *testing.T) {
+	settings := capCaptchaSettings()
+	settings[SettingKeyTurnstileEnabled] = "true"
+	settings[SettingKeyTurnstileSecretKey] = "turnstile-secret"
+
+	verifier := &capVerifierStub{response: &CapVerifyResponse{Success: true}}
+	cfg := &config.Config{
+		Server: config.ServerConfig{Mode: "release"},
+	}
+	settingService := NewSettingService(&settingRepoStub{values: settings}, cfg)
+	svc := NewAuthService(nil, &userRepoStub{}, nil, nil, cfg, settingService, nil, nil, nil, nil, nil, nil, nil)
+	svc.SetCapService(NewCapService(settingService, verifier))
+
+	err := svc.VerifyCaptcha(context.Background(), CaptchaProof{
+		TurnstileToken: "token",
+	}, "203.0.113.10")
+
+	require.ErrorIs(t, err, ErrCaptchaProviderConflict)
+	require.Zero(t, verifier.called)
+}
+
+func TestVerifyActionCaptchaIfEnabledVerifiesCapProof(t *testing.T) {
+	verifier := &capVerifierStub{response: &CapVerifyResponse{Success: true}}
+	cfg := &config.Config{
+		Server: config.ServerConfig{Mode: "release"},
+	}
+	settingService := NewSettingService(&settingRepoStub{values: capCaptchaSettings()}, cfg)
+	svc := NewAuthService(nil, &userRepoStub{}, nil, nil, cfg, settingService, nil, nil, nil, nil, nil, nil, nil)
+	svc.SetCapService(NewCapService(settingService, verifier))
+
+	err := svc.VerifyActionCaptchaIfEnabled(context.Background(), CaptchaProof{
+		TurnstileToken: "cap-action-token",
+	}, "203.0.113.10")
+
+	require.NoError(t, err)
+	require.Equal(t, 1, verifier.called)
+	require.Equal(t, "cap-action-token", verifier.token)
+}
+

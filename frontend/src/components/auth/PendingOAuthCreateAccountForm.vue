@@ -29,6 +29,9 @@
         :aliyun-scene-id="aliyunCaptchaSceneId"
         :aliyun-prefix="aliyunCaptchaPrefix"
         :aliyun-region="aliyunCaptchaRegion"
+        :cap-enabled="capEnabled"
+        :cap-api-endpoint="capApiEndpoint"
+        :cap-site-key="capSiteKey"
         @verify="onTurnstileVerify"
         @expire="onTurnstileExpire"
         @error="onTurnstileError"
@@ -147,6 +150,9 @@ const aliyunCaptchaEnabled = ref(false)
 const aliyunCaptchaSceneId = ref('')
 const aliyunCaptchaPrefix = ref('')
 const aliyunCaptchaRegion = ref('cn')
+const capEnabled = ref(false)
+const capApiEndpoint = ref('')
+const capSiteKey = ref('')
 const turnstileToken = ref('')
 const tencentCaptchaRandstr = ref('')
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
@@ -156,11 +162,18 @@ const aliyunCaptchaReady = computed(
     Boolean(aliyunCaptchaSceneId.value) &&
     Boolean(aliyunCaptchaPrefix.value)
 )
-// 动作触发式验证码（腾讯/阿里云）：发送验证码、提交时弹窗验证
+const capReady = computed(
+  () =>
+    capEnabled.value &&
+    Boolean(capApiEndpoint.value) &&
+    Boolean(capSiteKey.value)
+)
+// 动作触发式验证码（腾讯/阿里云/Cap）：发送验证码、提交时弹窗验证
 const actionCaptchaEnabled = computed(
   () =>
     (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) ||
-    aliyunCaptchaReady.value
+    aliyunCaptchaReady.value ||
+    capReady.value
 )
 const captchaEnabled = computed(
   () =>
@@ -357,6 +370,9 @@ onMounted(async () => {
     aliyunCaptchaSceneId.value = settings.aliyun_captcha_scene_id || ''
     aliyunCaptchaPrefix.value = settings.aliyun_captcha_prefix || ''
     aliyunCaptchaRegion.value = settings.aliyun_captcha_region || 'cn'
+    capEnabled.value = settings.cap_enabled === true
+    capApiEndpoint.value = settings.cap_api_endpoint || ''
+    capSiteKey.value = settings.cap_site_key || ''
   } catch {
     invitationCodeEnabled.value = false
     emailVerifyEnabled.value = true
@@ -369,6 +385,9 @@ onMounted(async () => {
     aliyunCaptchaSceneId.value = ''
     aliyunCaptchaPrefix.value = ''
     aliyunCaptchaRegion.value = 'cn'
+    capEnabled.value = false
+    capApiEndpoint.value = ''
+    capSiteKey.value = ''
   }
 })
 

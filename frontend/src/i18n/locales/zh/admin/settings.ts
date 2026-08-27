@@ -212,7 +212,8 @@ export default {
         provider: '验证服务商',
         providerTurnstile: 'Cloudflare Turnstile',
         providerTencent: '腾讯天御验证码',
-        providerAliyun: '阿里云验证码 2.0'
+        providerAliyun: '阿里云验证码 2.0',
+        providerCap: 'Cap (TryCap)'
       },
       tencentCaptcha: {
         title: '腾讯天御验证码',
@@ -255,6 +256,16 @@ export default {
         regionCn: '中国内地',
         regionSgp: '新加坡',
         regionHint: '决定前端脚本接入区域与服务端接入点，需与阿里云验证码实例所属地域一致'
+      },
+      cap: {
+        apiEndpoint: 'API 端点',
+        apiEndpointHint: 'Cap 服务的 API 端点 URL，例如 https://cap.example.com',
+        siteKey: '站点密钥 (Site Key)',
+        siteKeyHint: '在 Cap 实例中创建站点后获取的 Site Key',
+        secretKey: '私密密钥 (Secret Key)',
+        secretKeyHint: '用于服务端验证的 Secret Key（请保密）',
+        secretKeyConfiguredHint: '密钥已配置，留空以保留当前值。',
+        openDocs: '查看 Cap 官方文档'
       },
       apiKeyAcl: {
         title: 'API Key IP 访问控制',

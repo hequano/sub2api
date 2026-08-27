@@ -55,6 +55,7 @@ type SettingHandler struct {
 	emailService             *service.EmailService
 	turnstileService         *service.TurnstileService
 	aliyunCaptchaService     *service.AliyunCaptchaService
+	capService               *service.CapService
 	opsService               *service.OpsService
 	paymentConfigService     *service.PaymentConfigService
 	paymentService           *service.PaymentService
@@ -87,6 +88,12 @@ func (h *SettingHandler) SetNotificationEmailService(notificationEmailService *s
 // changing the constructor signature used by existing unit tests.
 func (h *SettingHandler) SetAliyunCaptchaService(aliyunCaptchaService *service.AliyunCaptchaService) {
 	h.aliyunCaptchaService = aliyunCaptchaService
+}
+
+// SetCapService attaches the Cap captcha credential validator without
+// changing the constructor signature used by existing unit tests.
+func (h *SettingHandler) SetCapService(capService *service.CapService) {
+	h.capService = capService
 }
 
 // SetStepUpDeps attaches the services backing the step-up switch preconditions
@@ -176,6 +183,10 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		AliyunCaptchaSceneID:                                   settings.AliyunCaptchaSceneID,
 		AliyunCaptchaPrefix:                                    settings.AliyunCaptchaPrefix,
 		AliyunCaptchaRegion:                                    settings.AliyunCaptchaRegion,
+		CapEnabled:                                             settings.CapEnabled,
+		CapApiEndpoint:                                         settings.CapApiEndpoint,
+		CapSiteKey:                                             settings.CapSiteKey,
+		CapSecretKeyConfigured:                                 settings.CapSecretKeyConfigured,
 		APIKeyACLTrustForwardedIP:                              settings.APIKeyACLTrustForwardedIP,
 		ForwardedClientIPHeaders:                               settings.ForwardedClientIPHeaders,
 		LinuxDoConnectEnabled:                                  settings.LinuxDoConnectEnabled,

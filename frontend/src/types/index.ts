@@ -228,6 +228,9 @@ export interface PublicSettings {
   aliyun_captcha_scene_id?: string
   aliyun_captcha_prefix?: string
   aliyun_captcha_region?: string
+  cap_enabled?: boolean
+  cap_api_endpoint?: string
+  cap_site_key?: string
   site_name: string
   site_logo: string
   site_subtitle: string

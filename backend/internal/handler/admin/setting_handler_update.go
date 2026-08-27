@@ -71,6 +71,12 @@ type UpdateSettingsRequest struct {
 	AliyunCaptchaPrefix          string `json:"aliyun_captcha_prefix"`
 	AliyunCaptchaRegion          string `json:"aliyun_captcha_region"`
 
+	// Cap (TryCap) 验证码设置
+	CapEnabled     bool   `json:"cap_enabled"`
+	CapApiEndpoint string `json:"cap_api_endpoint"`
+	CapSiteKey     string `json:"cap_site_key"`
+	CapSecretKey   string `json:"cap_secret_key"`
+
 	// API Key IP 访问控制设置
 	APIKeyACLTrustForwardedIP *bool     `json:"api_key_acl_trust_forwarded_ip"`
 	ForwardedClientIPHeaders  *[]string `json:"forwarded_client_ip_headers"`
@@ -475,6 +481,7 @@ func settingsAuditRequest(req UpdateSettingsRequest) UpdateSettingsRequest {
 	req.TencentCaptchaCloudSecretID = strings.TrimSpace(req.TencentCaptchaCloudSecretID)
 	req.TencentCaptchaCloudSecretKey = strings.TrimSpace(req.TencentCaptchaCloudSecretKey)
 	req.AliyunCaptchaAccessKeySecret = strings.TrimSpace(req.AliyunCaptchaAccessKeySecret)
+	req.CapSecretKey = strings.TrimSpace(req.CapSecretKey)
 	return req
 }
 
@@ -647,14 +654,18 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	if _, sent := sentFields["aliyun_captcha_enabled"]; !sent {
 		aliyunCaptchaEnabled = previousSettings.AliyunCaptchaEnabled
 	}
+	capEnabled := req.CapEnabled
+	if _, sent := sentFields["cap_enabled"]; !sent {
+		capEnabled = previousSettings.CapEnabled
+	}
 	enabledCaptchaProviders := 0
-	for _, enabled := range []bool{turnstileEnabled, tencentCaptchaEnabled, aliyunCaptchaEnabled} {
+	for _, enabled := range []bool{turnstileEnabled, tencentCaptchaEnabled, aliyunCaptchaEnabled, capEnabled} {
 		if enabled {
 			enabledCaptchaProviders++
 		}
 	}
 	if enabledCaptchaProviders > 1 {
-		response.BadRequest(c, "Multiple captcha providers (Cloudflare Turnstile / Tencent Captcha / Aliyun Captcha) cannot be enabled at the same time")
+		response.BadRequest(c, "Multiple captcha providers (Cloudflare Turnstile / Tencent Captcha / Aliyun Captcha / Cap) cannot be enabled at the same time")
 		return
 	}
 	// 阿里云地域 normalize：未发送保留已存值，非法值一律按中国内地落库
@@ -770,6 +781,45 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			previousSettings.AliyunCaptchaRegion != req.AliyunCaptchaRegion
 		if credentialsChanged {
 			if err := h.aliyunCaptchaService.ValidateCredentials(c.Request.Context(), req.AliyunCaptchaAccessKeyID, req.AliyunCaptchaAccessKeySecret, req.AliyunCaptchaSceneID, req.AliyunCaptchaRegion); err != nil {
+				response.ErrorFrom(c, err)
+				return
+			}
+		}
+	}
+
+	// Cap (TryCap) 验证码参数验证
+	if capEnabled {
+		if _, sent := sentFields["cap_api_endpoint"]; !sent {
+			req.CapApiEndpoint = previousSettings.CapApiEndpoint
+		}
+		if _, sent := sentFields["cap_site_key"]; !sent {
+			req.CapSiteKey = previousSettings.CapSiteKey
+		}
+		req.CapApiEndpoint = strings.TrimSpace(req.CapApiEndpoint)
+		req.CapSiteKey = strings.TrimSpace(req.CapSiteKey)
+		req.CapSecretKey = strings.TrimSpace(req.CapSecretKey)
+
+		if req.CapApiEndpoint == "" {
+			response.BadRequest(c, "Cap API Endpoint is required when enabled")
+			return
+		}
+		if req.CapSiteKey == "" {
+			response.BadRequest(c, "Cap Site Key is required when enabled")
+			return
+		}
+		if req.CapSecretKey == "" {
+			if previousSettings.CapSecretKey == "" {
+				response.BadRequest(c, "Cap Secret Key is required when enabled")
+				return
+			}
+			req.CapSecretKey = previousSettings.CapSecretKey
+		}
+
+		credentialsChanged := previousSettings.CapApiEndpoint != req.CapApiEndpoint ||
+			previousSettings.CapSiteKey != req.CapSiteKey ||
+			previousSettings.CapSecretKey != req.CapSecretKey
+		if credentialsChanged && h.capService != nil {
+			if err := h.capService.ValidateCredentials(c.Request.Context(), req.CapApiEndpoint, req.CapSiteKey, req.CapSecretKey); err != nil {
 				response.ErrorFrom(c, err)
 				return
 			}
@@ -1537,6 +1587,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		AliyunCaptchaSceneID:                req.AliyunCaptchaSceneID,
 		AliyunCaptchaPrefix:                 req.AliyunCaptchaPrefix,
 		AliyunCaptchaRegion:                 req.AliyunCaptchaRegion,
+		CapEnabled:                          req.CapEnabled,
+		CapApiEndpoint:                      req.CapApiEndpoint,
+		CapSiteKey:                          req.CapSiteKey,
+		CapSecretKey:                        req.CapSecretKey,
 		APIKeyACLTrustForwardedIP: func() bool {
 			if req.APIKeyACLTrustForwardedIP != nil {
 				return *req.APIKeyACLTrustForwardedIP
@@ -2164,6 +2218,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		AliyunCaptchaSceneID:                                   updatedSettings.AliyunCaptchaSceneID,
 		AliyunCaptchaPrefix:                                    updatedSettings.AliyunCaptchaPrefix,
 		AliyunCaptchaRegion:                                    updatedSettings.AliyunCaptchaRegion,
+		CapEnabled:                                             updatedSettings.CapEnabled,
+		CapApiEndpoint:                                         updatedSettings.CapApiEndpoint,
+		CapSiteKey:                                             updatedSettings.CapSiteKey,
+		CapSecretKeyConfigured:                                 updatedSettings.CapSecretKeyConfigured,
 		APIKeyACLTrustForwardedIP:                              updatedSettings.APIKeyACLTrustForwardedIP,
 		ForwardedClientIPHeaders:                               updatedSettings.ForwardedClientIPHeaders,
 		LinuxDoConnectEnabled:                                  updatedSettings.LinuxDoConnectEnabled,

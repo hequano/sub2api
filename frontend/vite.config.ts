@@ -85,7 +85,13 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      vue(),
+      vue({
+        template: {
+          compilerOptions: {
+            isCustomElement: (tag) => tag.startsWith('cap-')
+          }
+        }
+      }),
       checker({
         vueTsc: true
       }),

@@ -59,6 +59,11 @@ type SystemSettings struct {
 	AliyunCaptchaSceneID                   string
 	AliyunCaptchaPrefix                    string
 	AliyunCaptchaRegion                    string
+	CapEnabled                             bool
+	CapApiEndpoint                         string
+	CapSiteKey                             string
+	CapSecretKey                           string
+	CapSecretKeyConfigured                 bool
 	APIKeyACLTrustForwardedIP              bool
 	ForwardedClientIPHeaders               []string
 
@@ -339,6 +344,9 @@ type PublicSettings struct {
 	AliyunCaptchaSceneID                string
 	AliyunCaptchaPrefix                 string
 	AliyunCaptchaRegion                 string
+	CapEnabled                          bool
+	CapApiEndpoint                      string
+	CapSiteKey                          string
 	SiteName                            string
 	SiteLogo                            string
 	SiteSubtitle                        string
