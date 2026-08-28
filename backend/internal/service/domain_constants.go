@@ -248,10 +248,10 @@ const (
 	SettingKeyAliyunCaptchaRegion          = "aliyun_captcha_region"            // 地域："cn"|"sgp"，决定前端脚本区域与服务端接入点
 
 	// Cap (TryCap) 验证码设置（开源自建/托管 PoW 验证码）
-	SettingKeyCapEnabled   = "cap_enabled"      // 是否启用 Cap 验证码
+	SettingKeyCapEnabled     = "cap_enabled"      // 是否启用 Cap 验证码
 	SettingKeyCapApiEndpoint = "cap_api_endpoint" // Cap 实例服务端地址
-	SettingKeyCapSiteKey   = "cap_site_key"     // Cap 站点公钥 (Site Key)
-	SettingKeyCapSecretKey = "cap_secret_key"   // Cap 服务端私钥 (Secret Key)
+	SettingKeyCapSiteKey     = "cap_site_key"     // Cap 站点公钥 (Site Key)
+	SettingKeyCapSecretKey   = "cap_secret_key"   // Cap 服务端私钥 (Secret Key)
 
 	// API Key IP 访问控制设置
 	SettingKeyAPIKeyACLTrustForwardedIP = "api_key_acl_trust_forwarded_ip" // API Key IP 白/黑名单是否信任转发 IP
