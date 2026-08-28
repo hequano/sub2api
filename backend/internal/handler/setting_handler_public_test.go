@@ -117,6 +117,41 @@ func TestSettingHandler_GetPublicSettings_ExposesTencentCaptchaConfiguration(t *
 	require.Equal(t, service.TencentCaptchaRegionINTL, resp.Data.TencentCaptchaRegion)
 }
 
+func TestSettingHandler_GetPublicSettings_ExposesCapConfiguration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	repo := &settingHandlerPublicRepoStub{
+		values: map[string]string{
+			service.SettingKeyCapEnabled:     "true",
+			service.SettingKeyCapApiEndpoint: "https://cap.example.com",
+			service.SettingKeyCapSiteKey:     "site-key",
+		},
+	}
+	h := NewSettingHandler(service.NewSettingService(repo, &config.Config{}), "test-version")
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+
+	h.GetPublicSettings(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			CapEnabled     bool   `json:"cap_enabled"`
+			CapApiEndpoint string `json:"cap_api_endpoint"`
+			CapSiteKey     string `json:"cap_site_key"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &resp))
+	require.Equal(t, 0, resp.Code)
+	require.True(t, resp.Data.CapEnabled)
+	require.Equal(t, "https://cap.example.com", resp.Data.CapApiEndpoint)
+	require.Equal(t, "site-key", resp.Data.CapSiteKey)
+}
+
 func TestSettingHandler_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	h := NewSettingHandler(service.NewSettingService(&settingHandlerPublicRepoStub{
