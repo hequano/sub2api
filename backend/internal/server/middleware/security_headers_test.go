@@ -349,6 +349,21 @@ func TestEnhanceCSPPolicy(t *testing.T) {
 		assert.Equal(t, 1, count)
 	})
 
+	t.Run("allows_cap_wasm_without_enabling_javascript_eval", func(t *testing.T) {
+		policy := "default-src 'self'; script-src 'self' __CSP_NONCE__"
+		enhanced := enhanceCSPPolicy(policy)
+
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "script-src", CapWasmEvalSource))
+		assert.Equal(t, 0, countDirectiveValue(enhanced, "script-src", "'unsafe-eval'"))
+	})
+
+	t.Run("does_not_duplicate_cap_wasm_source", func(t *testing.T) {
+		policy := "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' __CSP_NONCE__"
+		enhanced := enhanceCSPPolicy(policy)
+
+		assert.Equal(t, 1, countDirectiveValue(enhanced, "script-src", CapWasmEvalSource))
+	})
+
 	t.Run("adds_tencent_captcha_domain_for_web_sdk", func(t *testing.T) {
 		policy := "default-src 'self'; script-src 'self' __CSP_NONCE__"
 		enhanced := enhanceCSPPolicy(policy)

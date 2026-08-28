@@ -49,6 +49,8 @@ const (
 	AirwallexDemoCheckoutDomain = "https://checkout-demo.airwallex.com"
 	// JsDelivrCDNDomain 是 Cap 等前端 Web 组件的 CDN 主机。
 	JsDelivrCDNDomain = "https://cdn.jsdelivr.net"
+	// CapWasmEvalSource 只允许 WebAssembly 编译，不放开普通 JavaScript eval。
+	CapWasmEvalSource = "'wasm-unsafe-eval'"
 )
 
 var requiredCSPDirectiveValues = []struct {
@@ -86,6 +88,7 @@ var requiredCSPDirectiveValues = []struct {
 	{"style-src", AirwallexDemoCheckoutDomain},
 	{"frame-src", AirwallexDemoCheckoutDomain},
 	{"script-src", JsDelivrCDNDomain},
+	{"script-src", CapWasmEvalSource},
 }
 
 // GenerateNonce generates a cryptographically secure random nonce.
