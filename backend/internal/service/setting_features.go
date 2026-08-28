@@ -492,6 +492,7 @@ type CaptchaProviderConfig struct {
 	TurnstileSecretKey string
 	Tencent            TencentCaptchaConfig
 	Aliyun             AliyunCaptchaConfig
+	Cap                CapConfig
 }
 
 func (s *SettingService) GetCaptchaProviderConfig(ctx context.Context) (CaptchaProviderConfig, error) {
@@ -509,6 +510,10 @@ func (s *SettingService) GetCaptchaProviderConfig(ctx context.Context) (CaptchaP
 		SettingKeyAliyunCaptchaAccessKeySecret,
 		SettingKeyAliyunCaptchaSceneID,
 		SettingKeyAliyunCaptchaRegion,
+		SettingKeyCapEnabled,
+		SettingKeyCapApiEndpoint,
+		SettingKeyCapSiteKey,
+		SettingKeyCapSecretKey,
 	})
 	if err != nil {
 		return CaptchaProviderConfig{}, fmt.Errorf("read captcha provider settings: %w", err)
@@ -531,6 +536,12 @@ func (s *SettingService) GetCaptchaProviderConfig(ctx context.Context) (CaptchaP
 			SceneID:         values[SettingKeyAliyunCaptchaSceneID],
 			Region:          normalizeAliyunCaptchaRegion(values[SettingKeyAliyunCaptchaRegion]),
 		},
+		Cap: CapConfig{
+			Enabled:     values[SettingKeyCapEnabled] == "true",
+			ApiEndpoint: values[SettingKeyCapApiEndpoint],
+			SiteKey:     values[SettingKeyCapSiteKey],
+			SecretKey:   values[SettingKeyCapSecretKey],
+		},
 	}, nil
 }
 
@@ -545,6 +556,19 @@ func (s *SettingService) GetTencentCaptchaConfig(ctx context.Context) TencentCap
 		return TencentCaptchaConfig{}
 	}
 	return config.Tencent
+}
+
+func (s *SettingService) IsCapEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyCapEnabled)
+	return err == nil && value == "true"
+}
+
+func (s *SettingService) GetCapConfig(ctx context.Context) CapConfig {
+	config, err := s.GetCaptchaProviderConfig(ctx)
+	if err != nil {
+		return CapConfig{}
+	}
+	return config.Cap
 }
 
 // IsIdentityPatchEnabled 检查是否启用身份补丁（Claude -> Gemini systemInstruction 注入）

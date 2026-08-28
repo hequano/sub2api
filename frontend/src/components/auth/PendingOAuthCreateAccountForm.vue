@@ -29,6 +29,9 @@
         :aliyun-scene-id="aliyunCaptchaSceneId"
         :aliyun-prefix="aliyunCaptchaPrefix"
         :aliyun-region="aliyunCaptchaRegion"
+        :cap-enabled="capEnabled"
+        :cap-api-endpoint="capApiEndpoint"
+        :cap-site-key="capSiteKey"
         @verify="onTurnstileVerify"
         @expire="onTurnstileExpire"
         @error="onTurnstileError"
@@ -49,7 +52,7 @@
         :data-testid="`${testIdPrefix}-create-account-send-code`"
         type="button"
         class="btn btn-secondary shrink-0"
-        :disabled="isSubmitting || isSendingCode || countdown > 0 || !email.trim() || (turnstileEnabled && !turnstileToken)"
+        :disabled="isSubmitting || isSendingCode || countdown > 0 || !email.trim() || (inlineCaptchaEnabled && !turnstileToken)"
         @click="handleSendCode"
       >
         {{
@@ -80,7 +83,7 @@
       :data-testid="`${testIdPrefix}-create-account-submit`"
       type="button"
       class="btn btn-primary w-full"
-      :disabled="isSubmitting || !email.trim() || password.length < 6 || (invitationCodeEnabled && !invitationCode.trim()) || (turnstileEnabled && !turnstileToken)"
+      :disabled="isSubmitting || !email.trim() || password.length < 6 || (invitationCodeEnabled && !invitationCode.trim()) || (inlineCaptchaEnabled && !turnstileToken)"
       @click="handleSubmit"
     >
       {{ isSubmitting ? t('common.processing') : t('auth.createAccount') }}
@@ -147,6 +150,9 @@ const aliyunCaptchaEnabled = ref(false)
 const aliyunCaptchaSceneId = ref('')
 const aliyunCaptchaPrefix = ref('')
 const aliyunCaptchaRegion = ref('cn')
+const capEnabled = ref(false)
+const capApiEndpoint = ref('')
+const capSiteKey = ref('')
 const turnstileToken = ref('')
 const tencentCaptchaRandstr = ref('')
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
@@ -156,15 +162,26 @@ const aliyunCaptchaReady = computed(
     Boolean(aliyunCaptchaSceneId.value) &&
     Boolean(aliyunCaptchaPrefix.value)
 )
-// 动作触发式验证码（腾讯/阿里云）：发送验证码、提交时弹窗验证
+const capReady = computed(
+  () =>
+    capEnabled.value &&
+    Boolean(capApiEndpoint.value) &&
+    Boolean(capSiteKey.value)
+)
+const inlineCaptchaEnabled = computed(
+  () =>
+    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) ||
+    capReady.value
+)
+// 动作触发式验证码（腾讯/阿里云/Cap）：发送验证码、提交时验证
 const actionCaptchaEnabled = computed(
   () =>
     (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) ||
-    aliyunCaptchaReady.value
+    aliyunCaptchaReady.value ||
+    capReady.value
 )
 const captchaEnabled = computed(
-  () =>
-    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) || actionCaptchaEnabled.value
+  () => inlineCaptchaEnabled.value || actionCaptchaEnabled.value
 )
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null
@@ -217,7 +234,7 @@ function startCountdown(seconds: number) {
       return
     }
 
-    countdown.value -= 1
+    countdown.value--
   }, 1000)
 }
 
@@ -227,9 +244,9 @@ function getRequestErrorMessage(error: unknown, fallback: string): string {
 }
 
 function resetTurnstile() {
+  turnstileRef.value?.reset()
   turnstileToken.value = ''
   tencentCaptchaRandstr.value = ''
-  turnstileRef.value?.reset()
 }
 
 function onTurnstileVerify(token: string, randstr = '') {
@@ -241,13 +258,11 @@ function onTurnstileVerify(token: string, randstr = '') {
 function onTurnstileExpire() {
   turnstileToken.value = ''
   tencentCaptchaRandstr.value = ''
-  sendCodeError.value = t('auth.turnstileExpired')
 }
 
 function onTurnstileError() {
   turnstileToken.value = ''
   tencentCaptchaRandstr.value = ''
-  sendCodeError.value = t('auth.turnstileFailed')
 }
 
 async function acquireActionProof(): Promise<boolean> {
@@ -267,7 +282,7 @@ async function handleSendCode() {
     return
   }
 
-  if (turnstileEnabled.value && !turnstileToken.value) {
+  if (inlineCaptchaEnabled.value && !turnstileToken.value) {
     sendCodeError.value = t('auth.completeVerification')
     return
   }
@@ -284,7 +299,9 @@ async function handleSendCode() {
     const response = await sendPendingOAuthVerifyCode({
       email: trimmedEmail,
       turnstile_token:
-        turnstileEnabled.value || aliyunCaptchaEnabled.value ? turnstileToken.value : undefined,
+        turnstileEnabled.value || aliyunCaptchaEnabled.value || capEnabled.value
+          ? turnstileToken.value
+          : undefined,
       tencent_captcha_ticket: tencentCaptchaEnabled.value ? turnstileToken.value : undefined,
       tencent_captcha_randstr: tencentCaptchaEnabled.value ? tencentCaptchaRandstr.value : undefined
     })
@@ -306,10 +323,10 @@ async function handleSubmit() {
     return
   }
 
-  // Turnstile 票据一次性：发送验证码已消耗上一枚，reset 后要等新票据回调。
+  // Turnstile/Cap 票据一次性：发送验证码已消耗上一枚，reset 后要等新票据回调。
   // 缺票时不能提交——create-account 端点会校验验证码，空 token 直接被判失败。
   // 表单的隐式提交（输入框回车）绕得过按钮的 disabled，所以这里必须再挡一次。
-  if (turnstileEnabled.value && !turnstileToken.value) {
+  if (inlineCaptchaEnabled.value && !turnstileToken.value) {
     sendCodeError.value = t('auth.completeVerification')
     return
   }
@@ -322,7 +339,7 @@ async function handleSubmit() {
     email: trimmedEmail,
     password: password.value,
     verifyCode: emailVerifyEnabled.value ? verifyCode.value.trim() : '',
-    ...((turnstileEnabled.value || aliyunCaptchaEnabled.value) && turnstileToken.value
+    ...((turnstileEnabled.value || aliyunCaptchaEnabled.value || capEnabled.value) && turnstileToken.value
       ? { turnstileToken: turnstileToken.value }
       : {}),
     ...(tencentCaptchaEnabled.value && turnstileToken.value
@@ -357,6 +374,9 @@ onMounted(async () => {
     aliyunCaptchaSceneId.value = settings.aliyun_captcha_scene_id || ''
     aliyunCaptchaPrefix.value = settings.aliyun_captcha_prefix || ''
     aliyunCaptchaRegion.value = settings.aliyun_captcha_region || 'cn'
+    capEnabled.value = settings.cap_enabled === true
+    capApiEndpoint.value = settings.cap_api_endpoint || ''
+    capSiteKey.value = settings.cap_site_key || ''
   } catch {
     invitationCodeEnabled.value = false
     emailVerifyEnabled.value = true
@@ -369,6 +389,9 @@ onMounted(async () => {
     aliyunCaptchaSceneId.value = ''
     aliyunCaptchaPrefix.value = ''
     aliyunCaptchaRegion.value = 'cn'
+    capEnabled.value = false
+    capApiEndpoint.value = ''
+    capSiteKey.value = ''
   }
 })
 

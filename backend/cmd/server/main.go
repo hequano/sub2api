@@ -29,6 +29,9 @@ import (
 //go:embed VERSION
 var embeddedVersion string
 
+//go:embed CUSTOM_VERSION
+var embeddedCustomVersion string
+
 // Build-time variables (can be set by ldflags)
 var (
 	Version   = ""
@@ -43,10 +46,16 @@ func init() {
 		return
 	}
 
-	// 默认从 embedded VERSION 文件读取版本号（编译期打包进二进制）。
-	Version = strings.TrimSpace(embeddedVersion)
-	if Version == "" {
-		Version = "0.0.0-dev"
+	// 默认从 embedded VERSION 文件与 CUSTOM_VERSION 文件读取版本号（编译期打包进二进制）。
+	base := strings.TrimSpace(embeddedVersion)
+	if base == "" {
+		base = "0.0.0-dev"
+	}
+	custom := strings.TrimLeft(strings.TrimSpace(embeddedCustomVersion), ".")
+	if custom != "" {
+		Version = base + "." + custom
+	} else {
+		Version = base
 	}
 }
 

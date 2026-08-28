@@ -239,13 +239,19 @@ const (
 	SettingKeyTencentCaptchaCloudSecretKey = "tencent_captcha_cloud_secret_key"
 	SettingKeyTencentCaptchaRegion         = "tencent_captcha_region" // 站点："cn"|"intl"，决定前端 SDK 脚本与服务端接入点
 
-	// 阿里云验证码 2.0 设置（与 Turnstile、腾讯天御互斥，同一时间仅可启用一家）
+	// 阿里云验证码 2.0 设置（与 Turnstile、腾讯天御、Cap 互斥，同一时间仅可启用一家）
 	SettingKeyAliyunCaptchaEnabled         = "aliyun_captcha_enabled"           // 是否启用阿里云验证码
 	SettingKeyAliyunCaptchaAccessKeyID     = "aliyun_captcha_access_key_id"     // 阿里云 AccessKey ID
 	SettingKeyAliyunCaptchaAccessKeySecret = "aliyun_captcha_access_key_secret" // 阿里云 AccessKey Secret
 	SettingKeyAliyunCaptchaSceneID         = "aliyun_captcha_scene_id"          // 验证场景 ID（所有认证流程共用）
 	SettingKeyAliyunCaptchaPrefix          = "aliyun_captcha_prefix"            // 身份标，前端 SDK 初始化用
 	SettingKeyAliyunCaptchaRegion          = "aliyun_captcha_region"            // 地域："cn"|"sgp"，决定前端脚本区域与服务端接入点
+
+	// Cap (TryCap) 验证码设置（开源自建/托管 PoW 验证码）
+	SettingKeyCapEnabled   = "cap_enabled"      // 是否启用 Cap 验证码
+	SettingKeyCapApiEndpoint = "cap_api_endpoint" // Cap 实例服务端地址
+	SettingKeyCapSiteKey   = "cap_site_key"     // Cap 站点公钥 (Site Key)
+	SettingKeyCapSecretKey = "cap_secret_key"   // Cap 服务端私钥 (Secret Key)
 
 	// API Key IP 访问控制设置
 	SettingKeyAPIKeyACLTrustForwardedIP = "api_key_acl_trust_forwarded_ip" // API Key IP 白/黑名单是否信任转发 IP

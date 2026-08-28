@@ -47,6 +47,8 @@ const (
 	AirwallexDemoStaticDomain = "https://static-demo.airwallex.com"
 	// AirwallexDemoCheckoutDomain 是 Airwallex 沙箱环境收银台元素和 iframe 域名。
 	AirwallexDemoCheckoutDomain = "https://checkout-demo.airwallex.com"
+	// JsDelivrCDNDomain 是 Cap 等前端 Web 组件的 CDN 主机。
+	JsDelivrCDNDomain = "https://cdn.jsdelivr.net"
 )
 
 var requiredCSPDirectiveValues = []struct {
@@ -83,6 +85,7 @@ var requiredCSPDirectiveValues = []struct {
 	{"style-src", AirwallexDemoStaticDomain},
 	{"style-src", AirwallexDemoCheckoutDomain},
 	{"frame-src", AirwallexDemoCheckoutDomain},
+	{"script-src", JsDelivrCDNDomain},
 }
 
 // GenerateNonce generates a cryptographically secure random nonce.

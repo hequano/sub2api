@@ -80,6 +80,9 @@
             :aliyun-scene-id="aliyunCaptchaSceneId"
             :aliyun-prefix="aliyunCaptchaPrefix"
             :aliyun-region="aliyunCaptchaRegion"
+            :cap-enabled="capEnabled"
+            :cap-api-endpoint="capApiEndpoint"
+            :cap-site-key="capSiteKey"
             @verify="onTurnstileVerify"
             @expire="onTurnstileExpire"
             @error="onTurnstileError"
@@ -99,6 +102,9 @@
             :aliyun-scene-id="aliyunCaptchaSceneId"
             :aliyun-prefix="aliyunCaptchaPrefix"
             :aliyun-region="aliyunCaptchaRegion"
+            :cap-enabled="capEnabled"
+            :cap-api-endpoint="capApiEndpoint"
+            :cap-site-key="capSiteKey"
             @verify="onCreateAccountTurnstileVerify"
             @expire="onCreateAccountTurnstileExpire"
             @error="onCreateAccountTurnstileError"
@@ -270,6 +276,9 @@ const aliyunCaptchaEnabled = ref<boolean>(false)
 const aliyunCaptchaSceneId = ref<string>('')
 const aliyunCaptchaPrefix = ref<string>('')
 const aliyunCaptchaRegion = ref<string>('cn')
+const capEnabled = ref<boolean>(false)
+const capApiEndpoint = ref<string>('')
+const capSiteKey = ref<string>('')
 const siteName = ref<string>('Sub2API')
 const registrationEmailSuffixWhitelist = ref<string[]>([])
 // 域名限量注册开关：开启时非白名单域名可注册 1 个账户（由后端判定），前端不做白名单预检。
@@ -289,15 +298,26 @@ const aliyunCaptchaReady = computed(
     Boolean(aliyunCaptchaSceneId.value) &&
     Boolean(aliyunCaptchaPrefix.value)
 )
-// 动作触发式验证码（腾讯/阿里云）：重发验证码、创建账号时弹窗验证
+const capReady = computed(
+  () =>
+    capEnabled.value &&
+    Boolean(capApiEndpoint.value) &&
+    Boolean(capSiteKey.value)
+)
+const inlineCaptchaEnabled = computed(
+  () =>
+    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) ||
+    capReady.value
+)
+// 动作触发式验证码（腾讯/阿里云/Cap）：重发验证码、创建账号时验证
 const actionCaptchaEnabled = computed(
   () =>
     (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) ||
-    aliyunCaptchaReady.value
+    aliyunCaptchaReady.value ||
+    capReady.value
 )
 const captchaEnabled = computed(
-  () =>
-    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) || actionCaptchaEnabled.value
+  () => inlineCaptchaEnabled.value || actionCaptchaEnabled.value
 )
 
 const errors = ref({
@@ -309,7 +329,7 @@ const validationToastMessage = computed(
   () => errors.value.code || errors.value.turnstile || ''
 )
 const pendingOAuthCreateTurnstileRequired = computed(
-  () => isPendingOAuthFlow() && turnstileEnabled.value
+  () => isPendingOAuthFlow() && inlineCaptchaEnabled.value
 )
 const pendingOAuthCreateCaptchaEnabled = computed(
   () => isPendingOAuthFlow() && captchaEnabled.value
@@ -372,6 +392,9 @@ onMounted(async () => {
     aliyunCaptchaSceneId.value = settings.aliyun_captcha_scene_id || ''
     aliyunCaptchaPrefix.value = settings.aliyun_captcha_prefix || ''
     aliyunCaptchaRegion.value = settings.aliyun_captcha_region || 'cn'
+    capEnabled.value = settings.cap_enabled === true
+    capApiEndpoint.value = settings.cap_api_endpoint || ''
+    capSiteKey.value = settings.cap_site_key || ''
     siteName.value = settings.site_name || 'Sub2API'
     registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
       settings.registration_email_suffix_whitelist || []
@@ -544,7 +567,7 @@ async function sendCode(): Promise<void> {
       [pendingAuthTokenField.value]: pendingAuthToken.value || undefined,
       // 优先使用重发时新获取的 token（因为初始 token 可能已被使用）
       turnstile_token:
-        turnstileEnabled.value || aliyunCaptchaEnabled.value
+        turnstileEnabled.value || aliyunCaptchaEnabled.value || capEnabled.value
           ? resendTurnstileToken.value || initialTurnstileToken.value || undefined
           : undefined,
       tencent_captcha_ticket: tencentCaptchaEnabled.value
@@ -678,7 +701,7 @@ async function handleVerify(): Promise<void> {
         email: email.value,
         password: password.value,
         verify_code: verifyCode.value.trim(),
-        ...((turnstileEnabled.value || aliyunCaptchaEnabled.value) &&
+        ...((turnstileEnabled.value || aliyunCaptchaEnabled.value || capEnabled.value) &&
         createAccountTurnstileToken.value
           ? { turnstile_token: createAccountTurnstileToken.value }
           : {}),
@@ -724,7 +747,7 @@ async function handleVerify(): Promise<void> {
         password: password.value,
         verify_code: verifyCode.value.trim(),
         turnstile_token:
-          turnstileEnabled.value || aliyunCaptchaEnabled.value
+          turnstileEnabled.value || aliyunCaptchaEnabled.value || capEnabled.value
             ? initialTurnstileToken.value || undefined
             : undefined,
         tencent_captcha_ticket: tencentCaptchaEnabled.value ? initialTurnstileToken.value || undefined : undefined,

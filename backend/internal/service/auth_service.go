@@ -81,6 +81,7 @@ type AuthService struct {
 	turnstileService      *TurnstileService
 	tencentCaptchaService *TencentCaptchaService
 	aliyunCaptchaService  *AliyunCaptchaService
+	capService            *CapService
 	emailQueueService     *EmailQueueService
 	promoService          *PromoService
 	affiliateService      *AffiliateService
@@ -89,7 +90,7 @@ type AuthService struct {
 }
 
 type CaptchaProof struct {
-	// TurnstileToken 承载 Cloudflare Turnstile token；阿里云验证码复用该字段承载 captchaVerifyParam
+	// TurnstileToken 承载 Cloudflare Turnstile token；阿里云验证码与 Cap 验证码复用该字段承载 token/captchaVerifyParam
 	TurnstileToken string
 	TencentTicket  string
 	TencentRandstr string
@@ -152,6 +153,10 @@ func (s *AuthService) SetTencentCaptchaService(tencentCaptchaService *TencentCap
 
 func (s *AuthService) SetAliyunCaptchaService(aliyunCaptchaService *AliyunCaptchaService) {
 	s.aliyunCaptchaService = aliyunCaptchaService
+}
+
+func (s *AuthService) SetCapService(capService *CapService) {
+	s.capService = capService
 }
 
 // Register 用户注册，返回token和用户
@@ -421,8 +426,15 @@ func (s *AuthService) VerifyCaptcha(ctx context.Context, proof CaptchaProof, rem
 	turnstileEnabled := providerConfig.TurnstileEnabled
 	tencentEnabled := providerConfig.Tencent.Enabled
 	aliyunEnabled := providerConfig.Aliyun.Enabled
-	if captchaProvidersConflict(turnstileEnabled, tencentEnabled, aliyunEnabled) {
+	capEnabled := providerConfig.Cap.Enabled
+	if captchaProvidersConflict(turnstileEnabled, tencentEnabled, aliyunEnabled, capEnabled) {
 		return ErrCaptchaProviderConflict
+	}
+	if capEnabled {
+		if s.capService == nil {
+			return ErrCapNotConfigured
+		}
+		return s.capService.VerifyTokenWithConfig(ctx, providerConfig.Cap, proof.TurnstileToken, remoteIP)
 	}
 	if tencentEnabled {
 		if s.tencentCaptchaService == nil {
@@ -460,7 +472,7 @@ func captchaProvidersConflict(enabled ...bool) bool {
 }
 
 // VerifyActionCaptchaIfEnabled 仅保护动作触发的扩展入口（OAuth 登录启动、passkey 登录），
-// 腾讯天御与阿里云验证码启用时拦截；不扩大 Cloudflare Turnstile 的既有覆盖范围。
+// 腾讯天御、阿里云验证码与 Cap 验证码启用时拦截；不扩大 Cloudflare Turnstile 的既有覆盖范围。
 func (s *AuthService) VerifyActionCaptchaIfEnabled(ctx context.Context, proof CaptchaProof, remoteIP string) error {
 	if s == nil || s.settingService == nil {
 		return ErrServiceUnavailable
@@ -473,11 +485,18 @@ func (s *AuthService) VerifyActionCaptchaIfEnabled(ctx context.Context, proof Ca
 	}
 	tencentEnabled := providerConfig.Tencent.Enabled
 	aliyunEnabled := providerConfig.Aliyun.Enabled
-	if !tencentEnabled && !aliyunEnabled {
+	capEnabled := providerConfig.Cap.Enabled
+	if !tencentEnabled && !aliyunEnabled && !capEnabled {
 		return nil
 	}
-	if captchaProvidersConflict(providerConfig.TurnstileEnabled, tencentEnabled, aliyunEnabled) {
+	if captchaProvidersConflict(providerConfig.TurnstileEnabled, tencentEnabled, aliyunEnabled, capEnabled) {
 		return ErrCaptchaProviderConflict
+	}
+	if capEnabled {
+		if s.capService == nil {
+			return ErrCapNotConfigured
+		}
+		return s.capService.VerifyTokenWithConfig(ctx, providerConfig.Cap, proof.TurnstileToken, remoteIP)
 	}
 	if aliyunEnabled {
 		if s.aliyunCaptchaService == nil {

@@ -212,7 +212,8 @@ export default {
         provider: 'Provider',
         providerTurnstile: 'Cloudflare Turnstile',
         providerTencent: 'Tencent Captcha',
-        providerAliyun: 'Aliyun Captcha 2.0'
+        providerAliyun: 'Aliyun Captcha 2.0',
+        providerCap: 'Cap (TryCap)'
       },
       tencentCaptcha: {
         title: 'Tencent Captcha',
@@ -255,6 +256,16 @@ export default {
         regionCn: 'Mainland China',
         regionSgp: 'Singapore',
         regionHint: 'Determines the frontend script region and the server endpoint; must match your captcha instance region'
+      },
+      cap: {
+        apiEndpoint: 'API Endpoint',
+        apiEndpointHint: 'The API endpoint URL of your Cap instance, e.g. https://cap.example.com',
+        siteKey: 'Site Key',
+        siteKeyHint: 'Site Key obtained from your Cap instance dashboard',
+        secretKey: 'Secret Key',
+        secretKeyHint: 'Server-side verification Secret Key (keep this secret)',
+        secretKeyConfiguredHint: 'Secret key configured. Leave empty to keep the current value.',
+        openDocs: 'View Cap Documentation'
       },
       apiKeyAcl: {
         title: 'API Key IP Access Control',

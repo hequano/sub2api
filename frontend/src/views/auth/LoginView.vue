@@ -91,6 +91,9 @@
             :aliyun-scene-id="aliyunCaptchaSceneId"
             :aliyun-prefix="aliyunCaptchaPrefix"
             :aliyun-region="aliyunCaptchaRegion"
+            :cap-enabled="capEnabled"
+            :cap-api-endpoint="capApiEndpoint"
+            :cap-site-key="capSiteKey"
             @verify="onTurnstileVerify"
             @expire="onTurnstileExpire"
             @error="onTurnstileError"
@@ -100,7 +103,7 @@
         <!-- Submit Button -->
         <button
           type="submit"
-          :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
+          :disabled="authActionDisabled || (inlineCaptchaEnabled && !turnstileToken)"
           class="btn btn-primary w-full"
         >
           <svg
@@ -279,6 +282,9 @@ const aliyunCaptchaEnabled = ref<boolean>(false)
 const aliyunCaptchaSceneId = ref<string>('')
 const aliyunCaptchaPrefix = ref<string>('')
 const aliyunCaptchaRegion = ref<string>('cn')
+const capEnabled = ref<boolean>(false)
+const capApiEndpoint = ref<string>('')
+const capSiteKey = ref<string>('')
 const linuxdoOAuthEnabled = ref<boolean>(false)
 const dingtalkOAuthEnabled = ref<boolean>(false)
 const wechatOAuthEnabled = ref<boolean>(false)
@@ -307,15 +313,26 @@ const aliyunCaptchaReady = computed(
     Boolean(aliyunCaptchaSceneId.value) &&
     Boolean(aliyunCaptchaPrefix.value)
 )
-// 动作触发式验证码（腾讯/阿里云）：提交、OAuth 启动、passkey 时弹窗验证
+const capReady = computed(
+  () =>
+    capEnabled.value &&
+    Boolean(capApiEndpoint.value) &&
+    Boolean(capSiteKey.value)
+)
+const inlineCaptchaEnabled = computed(
+  () =>
+    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) ||
+    capReady.value
+)
+// 动作触发式验证码（腾讯/阿里云/Cap）：提交、OAuth 启动、passkey 时验证
 const actionCaptchaEnabled = computed(
   () =>
     (tencentCaptchaEnabled.value && Boolean(tencentCaptchaAppId.value)) ||
-    aliyunCaptchaReady.value
+    aliyunCaptchaReady.value ||
+    capReady.value
 )
 const captchaEnabled = computed(
-  () =>
-    (turnstileEnabled.value && Boolean(turnstileSiteKey.value)) || actionCaptchaEnabled.value
+  () => inlineCaptchaEnabled.value || actionCaptchaEnabled.value
 )
 
 // 2FA state
@@ -390,6 +407,9 @@ onMounted(async () => {
     aliyunCaptchaSceneId.value = settings.aliyun_captcha_scene_id || ''
     aliyunCaptchaPrefix.value = settings.aliyun_captcha_prefix || ''
     aliyunCaptchaRegion.value = settings.aliyun_captcha_region || 'cn'
+    capEnabled.value = settings.cap_enabled === true
+    capApiEndpoint.value = settings.cap_api_endpoint || ''
+    capSiteKey.value = settings.cap_site_key || ''
     linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
     dingtalkOAuthEnabled.value = settings.dingtalk_oauth_enabled ?? false
     wechatOAuthEnabled.value = isWeChatWebOAuthEnabled(settings)
@@ -547,8 +567,8 @@ function validateForm(): boolean {
     isValid = false
   }
 
-  // Turnstile validation
-  if (turnstileEnabled.value && !turnstileToken.value) {
+  // Inline Captcha (Turnstile / Cap) validation
+  if (inlineCaptchaEnabled.value && !turnstileToken.value) {
     errors.turnstile = t('auth.completeVerification')
     isValid = false
   }
@@ -574,12 +594,14 @@ async function handleLogin(): Promise<void> {
   isLoading.value = true
 
   try {
-    // Call auth store login（阿里云 captchaVerifyParam 复用 turnstile_token 字段）
+    // Call auth store login（阿里云/Cap token 复用 turnstile_token 字段）
     const response = await authStore.login({
       email: formData.email,
       password: formData.password,
       turnstile_token:
-        turnstileEnabled.value || aliyunCaptchaEnabled.value ? turnstileToken.value : undefined,
+        turnstileEnabled.value || aliyunCaptchaEnabled.value || capEnabled.value
+          ? turnstileToken.value
+          : undefined,
       tencent_captcha_ticket: tencentCaptchaEnabled.value ? turnstileToken.value : undefined,
       tencent_captcha_randstr: tencentCaptchaEnabled.value
         ? tencentCaptchaRandstr.value
