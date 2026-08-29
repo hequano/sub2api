@@ -204,7 +204,13 @@ func (s *FrontendServer) serveIndexHTML(c *gin.Context) {
 func (s *FrontendServer) injectSettings(settingsJSON []byte) []byte {
 	// Create the script tag to inject with nonce placeholder
 	// The placeholder will be replaced with actual nonce at request time
-	script := []byte(`<script nonce="` + NonceHTMLPlaceholder + `">window.__APP_CONFIG__=` + string(settingsJSON) + `;</script>`)
+	// Cap creates an about:srcdoc iframe for its instrumentation script. That
+	// document inherits our CSP, so expose this request's nonce for cap-widget
+	// to copy onto the iframe's inline script instead of weakening script-src.
+	// Use the server-side placeholder directly: browsers deliberately hide a
+	// script nonce from DOM attribute inspection, which makes currentScript an
+	// unreliable source across engines and isolated browser worlds.
+	script := []byte(`<script nonce="` + NonceHTMLPlaceholder + `">window.CAP_SCRIPT_NONCE="` + NonceHTMLPlaceholder + `";window.__APP_CONFIG__=` + string(settingsJSON) + `;</script>`)
 
 	// Inject before </head>
 	headClose := []byte("</head>")

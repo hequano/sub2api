@@ -28,6 +28,7 @@ const emit = defineEmits<{
 
 const containerRef = ref<HTMLElement | null>(null)
 let widgetElement: CapWidgetElement | null = null
+let creditsObserver: MutationObserver | null = null
 let cachedToken: string | null = null
 
 const resolvedEndpoint = computed(() => {
@@ -71,12 +72,27 @@ const handleReset = () => {
 }
 
 const destroyWidget = () => {
+  creditsObserver?.disconnect()
+  creditsObserver = null
   if (!widgetElement) return
   widgetElement.removeEventListener('solve', handleSolve)
   widgetElement.removeEventListener('error', handleError)
   widgetElement.removeEventListener('reset', handleReset)
   widgetElement.remove()
   widgetElement = null
+}
+
+const hideWidgetCredits = (el: CapWidgetElement) => {
+  const shadowRoot = el.shadowRoot
+  if (!shadowRoot) return
+
+  const removeCredits = () => {
+    shadowRoot.querySelector('.credits')?.remove()
+  }
+
+  removeCredits()
+  creditsObserver = new MutationObserver(removeCredits)
+  creditsObserver.observe(shadowRoot, { childList: true, subtree: true })
 }
 
 const renderWidget = () => {
@@ -88,6 +104,9 @@ const renderWidget = () => {
 
   const el = document.createElement('cap-widget') as CapWidgetElement
   el.setAttribute('data-cap-api-endpoint', resolvedEndpoint.value)
+  // cap-widget defaults its internal panel to 260px. Override the custom
+  // property on the host so it follows the full width of the auth form.
+  el.style.setProperty('--cap-widget-width', '100%')
   if (props.theme) {
     el.setAttribute('data-cap-theme', props.theme)
   }
@@ -98,6 +117,7 @@ const renderWidget = () => {
 
   widgetElement = el
   containerRef.value.appendChild(el)
+  hideWidgetCredits(el)
 }
 
 const reset = () => {
@@ -175,5 +195,6 @@ onUnmounted(() => {
 .cap-widget-container :deep(cap-widget) {
   display: block;
   width: 100%;
+  max-width: 100%;
 }
 </style>
