@@ -4,7 +4,7 @@ import { defineComponent, ref } from 'vue'
 
 import UsageView from '../UsageView.vue'
 
-const { list, exportList, getStats, getSnapshotV2, getById, getModelStats, listErrorLogs, routeQuery, aoaToSheet, sheetAddAoa, saveAs, xlsxWrite } = vi.hoisted(() => {
+const { list, exportList, getStats, getSnapshotV2, getById, getModelStats, listErrorLogs, listPromptEvents, getPromptEvent, showError, showInfo, routeQuery, aoaToSheet, sheetAddAoa, saveAs, xlsxWrite } = vi.hoisted(() => {
   vi.stubGlobal('localStorage', {
     getItem: vi.fn(() => null),
     setItem: vi.fn(),
@@ -19,6 +19,10 @@ const { list, exportList, getStats, getSnapshotV2, getById, getModelStats, listE
     getById: vi.fn(),
     getModelStats: vi.fn(),
     listErrorLogs: vi.fn(),
+    listPromptEvents: vi.fn(),
+    getPromptEvent: vi.fn(),
+    showError: vi.fn(),
+    showInfo: vi.fn(),
     routeQuery: {} as Record<string, string>,
 		aoaToSheet: vi.fn(() => ({})),
 		sheetAddAoa: vi.fn(),
@@ -86,12 +90,19 @@ vi.mock('@/api/admin/ops', () => ({
   listErrorLogs,
 }))
 
+vi.mock('@/features/prompt-audit/api', () => ({
+  default: {
+    listEvents: listPromptEvents,
+    getEvent: getPromptEvent,
+  },
+}))
+
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
-    showError: vi.fn(),
+    showError,
     showWarning: vi.fn(),
     showSuccess: vi.fn(),
-    showInfo: vi.fn(),
+    showInfo,
   }),
 }))
 
@@ -137,6 +148,11 @@ const UsageTableStub = {
   props: ['columns'],
   emits: ['userClick'],
   template: '<div data-test="usage-table"><button class="user-click" @click="$emit(\'userClick\', 2)">user</button></div>',
+}
+
+const AuditUsageTableStub = {
+  emits: ['auditReview'],
+  template: '<button data-test="review-row" @click="$emit(\'auditReview\', { request_id: \'req-audit-42\' })">review</button>',
 }
 const UserTokenRankingStub = {
   emits: ['select-user'],
@@ -268,6 +284,83 @@ describe('admin UsageView route filters', () => {
 
     expect(list).toHaveBeenCalledWith(expect.objectContaining({ user_id: 42 }), expect.anything())
     expect(wrapper.find('[data-test="user-filter-label"]').text()).toBe('42')
+  })
+})
+
+describe('admin UsageView audit review', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    list.mockResolvedValue({ items: [], total: 0, pages: 0 })
+    getStats.mockResolvedValue({
+      total_requests: 0,
+      total_input_tokens: 0,
+      total_output_tokens: 0,
+      total_cache_tokens: 0,
+      total_tokens: 0,
+      total_cost: 0,
+      total_actual_cost: 0,
+      average_duration_ms: 0,
+    })
+    getSnapshotV2.mockResolvedValue({ trend: [], models: [], groups: [] })
+    getModelStats.mockResolvedValue({ models: [] })
+    listPromptEvents.mockReset()
+    getPromptEvent.mockReset()
+    showError.mockReset()
+    showInfo.mockReset()
+  })
+
+  afterEach(() => vi.useRealTimers())
+
+  it('opens the exact prompt audit event linked by request ID', async () => {
+    const detail = { id: 91, snapshot: { request_id: 'req-audit-42' } }
+    listPromptEvents.mockResolvedValue({ items: [{ id: 91 }], total: 1, page: 1, page_size: 1, pages: 1 })
+    getPromptEvent.mockResolvedValue(detail)
+
+    const wrapper = mount(UsageView, {
+      global: { stubs: {
+        AppLayout: AppLayoutStub, UsageStatsCards: true, UsageFilters: UsageFiltersStub,
+        UsageTable: AuditUsageTableStub, UsageExportProgress: true, UsageCleanupDialog: true,
+        UserBalanceHistoryModal: true, Pagination: true, Select: true, DateRangePicker: true,
+        Icon: true, TokenUsageTrend: true, ModelDistributionChart: true,
+        GroupDistributionChart: true, EndpointDistributionChart: true, UserTokenRanking: true,
+        OpsErrorLogTable: true, OpsErrorDetailModal: true, EventDetailDialog: true,
+      } },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-test="review-row"]').trigger('click')
+    await flushPromises()
+
+    expect(listPromptEvents).toHaveBeenCalledWith(
+      expect.objectContaining({ request_id: 'req-audit-42' }),
+      1,
+      1,
+    )
+    expect(getPromptEvent).toHaveBeenCalledWith(91)
+    expect((wrapper.vm as any).selectedAuditEvent).toEqual(detail)
+    expect((wrapper.vm as any).showAuditReview).toBe(true)
+  })
+
+  it('explains when the request has no retained audit event', async () => {
+    listPromptEvents.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 1, pages: 0 })
+
+    const wrapper = mount(UsageView, {
+      global: { stubs: {
+        AppLayout: AppLayoutStub, UsageStatsCards: true, UsageFilters: UsageFiltersStub,
+        UsageTable: AuditUsageTableStub, UsageExportProgress: true, UsageCleanupDialog: true,
+        UserBalanceHistoryModal: true, Pagination: true, Select: true, DateRangePicker: true,
+        Icon: true, TokenUsageTrend: true, ModelDistributionChart: true,
+        GroupDistributionChart: true, EndpointDistributionChart: true, UserTokenRanking: true,
+        OpsErrorLogTable: true, OpsErrorDetailModal: true, EventDetailDialog: true,
+      } },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-test="review-row"]').trigger('click')
+    await flushPromises()
+
+    expect(showInfo).toHaveBeenCalledWith('admin.usage.reviewPacketNotRetained')
+    expect((wrapper.vm as any).showAuditReview).toBe(false)
   })
 })
 

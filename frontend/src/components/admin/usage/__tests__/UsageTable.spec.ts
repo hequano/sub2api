@@ -66,6 +66,8 @@ const messages: Record<string, string> = {
 	'usage.upstreamResponseModel': 'Upstream response',
 	'usage.modelVariant': 'Possible version variant',
 	'usage.modelMismatch': 'Different model',
+	'admin.usage.reviewPacket': 'Review request data',
+	'admin.usage.reviewPacketUnavailable': 'No request ID',
 }
 
 vi.mock('vue-i18n', async () => {
@@ -89,6 +91,7 @@ const DataTableStub = {
         <slot name="cell-tokens" :row="row" />
         <slot name="cell-cost" :row="row" />
         <slot name="cell-request_id" :row="row" />
+        <slot name="cell-actions" :row="row" />
       </div>
     </div>
   `,
@@ -533,6 +536,35 @@ describe('admin UsageTable request ID column', () => {
 
     expect(writeText).toHaveBeenCalledWith('req-admin-visible-id')
     expect(appStoreMocks.showSuccess).toHaveBeenCalledWith('Request ID copied')
+  })
+})
+
+describe('admin UsageTable audit review action', () => {
+  it('emits the selected usage row', async () => {
+    const row = { ...baseImageRow, request_id: 'req-reviewable' }
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [row],
+        columns: [{ key: 'actions', label: 'Actions' }],
+      },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+
+    await wrapper.get('[data-testid="usage-review-packet"]').trigger('click')
+
+    expect(wrapper.emitted('auditReview')?.[0]).toEqual([row])
+  })
+
+  it('disables review when the record has no request ID', () => {
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [{ ...baseImageRow, request_id: '' }],
+        columns: [{ key: 'actions', label: 'Actions' }],
+      },
+      global: { stubs: { DataTable: DataTableStub, EmptyState: true, Icon: true, Teleport: true } },
+    })
+
+    expect(wrapper.get('[data-testid="usage-review-packet"]').attributes('disabled')).toBeDefined()
   })
 })
 

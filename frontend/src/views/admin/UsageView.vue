@@ -133,6 +133,7 @@
             :default-sort-order="'desc'"
             @sort="handleSort"
             @userClick="handleUserClick"
+            @auditReview="openAuditReview"
             @ipGeoBatchFailed="handleIpGeoBatchFailed"
           />
           <Pagination v-if="pagination.total > 0" :page="pagination.page" :total="pagination.total" :page-size="pagination.page_size" @update:page="handlePageChange" @update:pageSize="handlePageSizeChange" />
@@ -164,6 +165,12 @@
         </div>
       </div>
       <OpsErrorDetailModal v-model:show="showErrorModal" :error-id="selectedErrorId" :error-type="'request'" />
+      <EventDetailDialog
+        :show="showAuditReview"
+        :event="selectedAuditEvent"
+        :loading="auditReviewLoading"
+        @close="closeAuditReview"
+      />
     </div>
   </AppLayout>
   <UsageExportProgress :show="exportProgress.show" :progress="exportProgress.progress" :current="exportProgress.current" :total="exportProgress.total" :estimated-time="exportProgress.estimatedTime" @cancel="cancelExport" />
@@ -200,6 +207,10 @@ import UsageCleanupDialog from '@/components/admin/usage/UsageCleanupDialog.vue'
 import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryModal.vue'
 import OpsErrorLogTable from '@/views/admin/ops/components/OpsErrorLogTable.vue'
 import OpsErrorDetailModal from '@/views/admin/ops/components/OpsErrorDetailModal.vue'
+import EventDetailDialog from '@/features/prompt-audit/components/EventDetailDialog.vue'
+import promptAuditAPI from '@/features/prompt-audit/api'
+import { emptyEventFilters } from '@/features/prompt-audit/viewModel'
+import type { PromptAuditEvent } from '@/features/prompt-audit/types'
 import { listErrorLogs } from '@/api/admin/ops'
 import type { OpsErrorLog } from '@/api/admin/ops'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'; import GroupDistributionChart from '@/components/charts/GroupDistributionChart.vue'; import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
@@ -238,6 +249,10 @@ const cleanupDialogVisible = ref(false)
 // Balance history modal state
 const showBalanceHistoryModal = ref(false)
 const balanceHistoryUser = ref<AdminUser | null>(null)
+const showAuditReview = ref(false)
+const auditReviewLoading = ref(false)
+const selectedAuditEvent = ref<PromptAuditEvent | null>(null)
+let auditReviewRequest = 0
 
 const breakdownFilters = computed(() => {
   const f: Record<string, any> = {}
@@ -262,6 +277,45 @@ const handleUserClick = async (userId: number) => {
   } catch {
     appStore.showError(t('admin.usage.failedToLoadUser'))
   }
+}
+
+const openAuditReview = async (row: AdminUsageLog) => {
+  const requestId = row.request_id?.trim()
+  if (!requestId) {
+    appStore.showInfo(t('admin.usage.reviewPacketUnavailable'))
+    return
+  }
+
+  const request = ++auditReviewRequest
+  showAuditReview.value = true
+  auditReviewLoading.value = true
+  selectedAuditEvent.value = null
+  try {
+    const filters = { ...emptyEventFilters(), request_id: requestId }
+    const page = await promptAuditAPI.listEvents(filters, 1, 1)
+    if (request !== auditReviewRequest) return
+    const event = page.items[0]
+    if (!event) {
+      showAuditReview.value = false
+      appStore.showInfo(t('admin.usage.reviewPacketNotRetained'))
+      return
+    }
+    selectedAuditEvent.value = await promptAuditAPI.getEvent(event.id)
+  } catch (error) {
+    if (request !== auditReviewRequest) return
+    showAuditReview.value = false
+    console.error('Failed to load usage audit packet:', error)
+    appStore.showError(t('admin.usage.reviewPacketLoadFailed'))
+  } finally {
+    if (request === auditReviewRequest) auditReviewLoading.value = false
+  }
+}
+
+const closeAuditReview = () => {
+  auditReviewRequest += 1
+  showAuditReview.value = false
+  auditReviewLoading.value = false
+  selectedAuditEvent.value = null
 }
 
 // Drill down from the per-user token ranking: scope the whole usage view to
@@ -626,7 +680,7 @@ const exportToExcel = async () => {
 }
 
 // Column visibility
-const ALWAYS_VISIBLE = ['user', 'created_at']
+const ALWAYS_VISIBLE = ['user', 'created_at', 'actions']
 const DEFAULT_HIDDEN_COLUMNS = ['reasoning_effort', 'request_id', 'user_agent']
 const HIDDEN_COLUMNS_KEY = 'usage-hidden-columns'
 const HIDDEN_COLUMNS_VERSION_KEY = 'usage-hidden-columns-version'
@@ -648,7 +702,8 @@ const allColumns = computed(() => [
   { key: 'created_at', label: t('usage.time'), sortable: true },
   { key: 'request_id', label: t('admin.usage.requestId'), sortable: false },
   { key: 'user_agent', label: t('usage.userAgent'), sortable: false },
-  { key: 'ip_address', label: t('admin.usage.ipAddress'), sortable: false }
+  { key: 'ip_address', label: t('admin.usage.ipAddress'), sortable: false },
+  { key: 'actions', label: t('admin.usage.actions'), sortable: false }
 ])
 
 const hiddenColumns = reactive<Set<string>>(new Set())

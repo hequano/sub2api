@@ -277,6 +277,20 @@
           <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
         </template>
 
+        <template #cell-actions="{ row }">
+          <button
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded text-gray-500 transition-colors hover:bg-primary-50 hover:text-primary-600 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-400 dark:hover:bg-primary-950/40 dark:hover:text-primary-300"
+            :disabled="!row.request_id"
+            :title="row.request_id ? t('admin.usage.reviewPacket') : t('admin.usage.reviewPacketUnavailable')"
+            :aria-label="t('admin.usage.reviewPacket')"
+            data-testid="usage-review-packet"
+            @click="$emit('auditReview', row)"
+          >
+            <Icon name="eye" size="sm" />
+          </button>
+        </template>
+
         <template #empty><EmptyState :message="t('usage.noRecords')" /></template>
       </DataTable>
     </div>
@@ -583,6 +597,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const emit = defineEmits<{
   userClick: [userID: number, email?: string]
+  auditReview: [row: AdminUsageLog]
   sort: [key: string, order: 'asc' | 'desc']
   ipGeoBatchFailed: []
 }>()
