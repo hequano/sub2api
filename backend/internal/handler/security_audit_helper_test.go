@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/gin-gonic/gin"
@@ -14,6 +15,14 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
 )
+
+func TestPromptAuditUsageRequestIDMatchesUsageBillingCorrelation(t *testing.T) {
+	ctx := context.WithValue(context.Background(), ctxkey.RequestID, "server-request")
+	require.Equal(t, "local:server-request", promptAuditUsageRequestID(ctx))
+
+	ctx = context.WithValue(ctx, ctxkey.ClientRequestID, "client-request")
+	require.Equal(t, "client:client-request", promptAuditUsageRequestID(ctx))
+}
 
 func TestCachesSecurityAuditCompletionSkipsWebSocketStages(t *testing.T) {
 	require.True(t, cachesSecurityAuditCompletion("http"))

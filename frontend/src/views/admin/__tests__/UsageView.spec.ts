@@ -152,7 +152,7 @@ const UsageTableStub = {
 
 const AuditUsageTableStub = {
   emits: ['auditReview'],
-  template: '<button data-test="review-row" @click="$emit(\'auditReview\', { request_id: \'req-audit-42\' })">review</button>',
+  template: '<button data-test="review-row" @click="$emit(\'auditReview\', { request_id: \'req-audit-42\', api_key_id: 7, model: \'gpt-test\', inbound_endpoint: \'/v1/chat/completions\', duration_ms: 2000, created_at: \'2026-08-29T10:52:53.000Z\' })">review</button>',
 }
 const UserTokenRankingStub = {
   emits: ['select-user'],
@@ -361,6 +361,42 @@ describe('admin UsageView audit review', () => {
 
     expect(showInfo).toHaveBeenCalledWith('admin.usage.reviewPacketNotRetained')
     expect((wrapper.vm as any).showAuditReview).toBe(false)
+  })
+
+  it('falls back to API key, route, model, and request start time for legacy correlation IDs', async () => {
+    const legacyEvent = {
+      id: 92,
+      created_at: '2026-08-29T10:52:51.000Z',
+      snapshot: { request_id: 'legacy-server-id', model: 'gpt-test' },
+    }
+    listPromptEvents
+      .mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 1, pages: 0 })
+      .mockResolvedValueOnce({ items: [legacyEvent], total: 1, page: 1, page_size: 100, pages: 1 })
+    getPromptEvent.mockResolvedValue({ ...legacyEvent, snapshot: { ...legacyEvent.snapshot, full_prompt: 'retained prompt' } })
+
+    const wrapper = mount(UsageView, {
+      global: { stubs: {
+        AppLayout: AppLayoutStub, UsageStatsCards: true, UsageFilters: UsageFiltersStub,
+        UsageTable: AuditUsageTableStub, UsageExportProgress: true, UsageCleanupDialog: true,
+        UserBalanceHistoryModal: true, Pagination: true, Select: true, DateRangePicker: true,
+        Icon: true, TokenUsageTrend: true, ModelDistributionChart: true,
+        GroupDistributionChart: true, EndpointDistributionChart: true, UserTokenRanking: true,
+        OpsErrorLogTable: true, OpsErrorDetailModal: true, EventDetailDialog: true,
+      } },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-test="review-row"]').trigger('click')
+    await flushPromises()
+
+    expect(listPromptEvents).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      api_key_id: '7',
+      endpoint: '/v1/chat/completions',
+      start_at: '2026-08-29T10:51:51.000Z',
+      end_at: '2026-08-29T10:53:53.000Z',
+    }), 1, 100)
+    expect(getPromptEvent).toHaveBeenCalledWith(92)
+    expect((wrapper.vm as any).selectedAuditEvent.snapshot.full_prompt).toBe('retained prompt')
   })
 })
 

@@ -523,7 +523,7 @@ export default {
       actions: 'Actions',
       reviewPacket: 'Review request data',
       reviewPacketUnavailable: 'This record has no request ID and cannot be linked to audit data',
-      reviewPacketNotRetained: 'No reviewable data was retained for this request. Only events saved by prompt audit at request time can be viewed.',
+      reviewPacketNotRetained: 'No request data matching this usage record was found. Older records may lack an exact correlation identifier.',
       reviewPacketLoadFailed: 'Failed to load audit data',
       allModels: 'All Models',
       allAccounts: 'All Accounts',

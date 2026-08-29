@@ -520,7 +520,7 @@ export default {
       actions: '操作',
       reviewPacket: '审查请求数据',
       reviewPacketUnavailable: '该记录没有请求 ID，无法关联审计数据',
-      reviewPacketNotRetained: '该请求未留存可审数据；只有请求发生时已开启提示词审计并保存的事件才能查看',
+      reviewPacketNotRetained: '未找到与该使用记录匹配的请求数据；较早的历史记录可能缺少可精确关联的请求标识',
       reviewPacketLoadFailed: '加载审计数据失败',
       allModels: '全部模型',
       allAccounts: '全部账户',

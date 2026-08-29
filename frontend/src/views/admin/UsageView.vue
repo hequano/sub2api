@@ -279,6 +279,33 @@ const handleUserClick = async (userId: number) => {
   }
 }
 
+const findLegacyAuditEvent = async (row: AdminUsageLog): Promise<PromptAuditEvent | undefined> => {
+  const apiKeyId = Number(row.api_key_id)
+  const usageCreatedAt = new Date(row.created_at).getTime()
+  if (!Number.isInteger(apiKeyId) || apiKeyId <= 0 || !Number.isFinite(usageCreatedAt)) return undefined
+
+  const durationMs = Math.max(0, Number(row.duration_ms) || 0)
+  const expectedStartAt = usageCreatedAt - durationMs
+  const windowMs = 60_000
+  const filters = {
+    ...emptyEventFilters(),
+    api_key_id: String(apiKeyId),
+    endpoint: row.inbound_endpoint?.trim() || '',
+    start_at: new Date(expectedStartAt - windowMs).toISOString(),
+    end_at: new Date(usageCreatedAt + windowMs).toISOString(),
+  }
+  const page = await promptAuditAPI.listEvents(filters, 1, 100)
+  const candidates = page.items
+    .filter((event) => !row.model || event.snapshot.model === row.model)
+    .map((event) => {
+      const eventTime = new Date(event.created_at).getTime()
+      return { event, distance: Math.min(Math.abs(eventTime - expectedStartAt), Math.abs(eventTime - usageCreatedAt)) }
+    })
+    .filter(({ distance }) => Number.isFinite(distance) && distance <= windowMs)
+    .sort((left, right) => left.distance - right.distance)
+  return candidates[0]?.event
+}
+
 const openAuditReview = async (row: AdminUsageLog) => {
   const requestId = row.request_id?.trim()
   if (!requestId) {
@@ -294,7 +321,7 @@ const openAuditReview = async (row: AdminUsageLog) => {
     const filters = { ...emptyEventFilters(), request_id: requestId }
     const page = await promptAuditAPI.listEvents(filters, 1, 1)
     if (request !== auditReviewRequest) return
-    const event = page.items[0]
+    const event = page.items[0] ?? await findLegacyAuditEvent(row)
     if (!event) {
       showAuditReview.value = false
       appStore.showInfo(t('admin.usage.reviewPacketNotRetained'))

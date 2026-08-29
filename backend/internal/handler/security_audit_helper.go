@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"crypto/sha256"
 	"net/http"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -160,7 +162,7 @@ func securityAuditWSTurn(c *gin.Context) (int, bool) {
 func buildSecurityAuditRequest(c *gin.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, protocol, model string, body []byte, stage string) securityaudit.Request {
 	legacy := buildContentModerationInput(c, apiKey, subject, protocol, model, body)
 	request := securityaudit.Request{
-		RequestID: legacy.RequestID, UserID: legacy.UserID, UserEmail: legacy.UserEmail,
+		RequestID: promptAuditUsageRequestID(c.Request.Context()), UserID: legacy.UserID, UserEmail: legacy.UserEmail,
 		APIKeyID: legacy.APIKeyID, APIKeyName: legacy.APIKeyName, GroupID: cloneSecurityAuditGroupID(legacy.GroupID),
 		GroupName: legacy.GroupName, Provider: legacy.Provider, Endpoint: legacy.Endpoint,
 		Protocol: legacy.Protocol, Model: legacy.Model, Body: body, Stage: strings.TrimSpace(stage),
@@ -175,6 +177,22 @@ func buildSecurityAuditRequest(c *gin.Context, apiKey *service.APIKey, subject m
 		request.Stage = "http"
 	}
 	return request
+}
+
+// promptAuditUsageRequestID mirrors the durable correlation ID chosen by
+// service.resolveUsageBillingRequestID for ordinary gateway calls. Keeping the
+// prefix is important: usage_logs.request_id stores the prefixed value.
+func promptAuditUsageRequestID(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if clientRequestID, ok := ctx.Value(ctxkey.ClientRequestID).(string); ok && strings.TrimSpace(clientRequestID) != "" {
+		return "client:" + strings.TrimSpace(clientRequestID)
+	}
+	if requestID, ok := ctx.Value(ctxkey.RequestID).(string); ok && strings.TrimSpace(requestID) != "" {
+		return "local:" + strings.TrimSpace(requestID)
+	}
+	return ""
 }
 
 func securityAuditStatus(decision *securityaudit.Decision) int {
