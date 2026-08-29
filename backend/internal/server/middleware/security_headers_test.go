@@ -151,6 +151,35 @@ func TestSecurityHeaders(t *testing.T) {
 		assert.Equal(t, "DENY", w.Header().Get("X-Frame-Options"))
 	})
 
+	t.Run("allows_javascript_eval_only_in_isolated_cap_frame", func(t *testing.T) {
+		cfg := config.CSPConfig{
+			Enabled: true,
+			Policy:  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' __CSP_NONCE__; frame-ancestors 'none'",
+		}
+		middleware := SecurityHeaders(cfg, nil)
+
+		frameRecorder := httptest.NewRecorder()
+		frameContext, _ := gin.CreateTestContext(frameRecorder)
+		frameContext.Request = httptest.NewRequest(http.MethodGet, CapFramePath, nil)
+		middleware(frameContext)
+
+		frameCSP := frameRecorder.Header().Get("Content-Security-Policy")
+		assert.Equal(t, 1, countDirectiveValue(frameCSP, "script-src", CapInstrumentationEvalSource))
+		assert.Equal(t, 1, countDirectiveValue(frameCSP, "frame-ancestors", "'self'"))
+		assert.Equal(t, 0, countDirectiveValue(frameCSP, "frame-ancestors", "'none'"))
+		assert.Equal(t, "SAMEORIGIN", frameRecorder.Header().Get("X-Frame-Options"))
+
+		pageRecorder := httptest.NewRecorder()
+		pageContext, _ := gin.CreateTestContext(pageRecorder)
+		pageContext.Request = httptest.NewRequest(http.MethodGet, "/register", nil)
+		middleware(pageContext)
+
+		pageCSP := pageRecorder.Header().Get("Content-Security-Policy")
+		assert.Equal(t, 0, countDirectiveValue(pageCSP, "script-src", CapInstrumentationEvalSource))
+		assert.Equal(t, 1, countDirectiveValue(pageCSP, "frame-ancestors", "'none'"))
+		assert.Equal(t, "DENY", pageRecorder.Header().Get("X-Frame-Options"))
+	})
+
 	t.Run("api_route_skips_csp_nonce_generation", func(t *testing.T) {
 		cfg := config.CSPConfig{
 			Enabled: true,

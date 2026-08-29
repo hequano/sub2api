@@ -622,6 +622,7 @@ func TestFrontendServer_Middleware(t *testing.T) {
 
 		spaPaths := []string{
 			"/",
+			"/cap-frame",
 			"/dashboard",
 			"/users/123",
 			"/settings/profile",

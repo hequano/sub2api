@@ -115,6 +115,8 @@ onBeforeUnmount(() => {
 })
 
 onMounted(async () => {
+  if (route.meta.capFrame === true) return
+
   window.addEventListener('admin-compliance-required', onAdminComplianceRequired)
 
   // Check if setup is needed
@@ -137,9 +139,9 @@ onMounted(async () => {
 </script>
 
 <template>
-  <NavigationProgress />
+  <NavigationProgress v-if="route.meta.capFrame !== true" />
   <RouterView />
-  <Toast />
-  <AnnouncementPopup />
-  <AdminComplianceDialog />
+  <Toast v-if="route.meta.capFrame !== true" />
+  <AnnouncementPopup v-if="route.meta.capFrame !== true" />
+  <AdminComplianceDialog v-if="route.meta.capFrame !== true" />
 </template>

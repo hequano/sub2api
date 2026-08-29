@@ -18,6 +18,16 @@ import { resolveRouteDocumentTitle } from './title'
  * Route definitions with lazy loading
  */
 const routes: RouteRecordRaw[] = [
+  {
+    path: '/cap-frame',
+    name: 'CapFrame',
+    component: () => import('@/views/auth/CapFrameView.vue'),
+    meta: {
+      requiresAuth: false,
+      capFrame: true,
+      title: 'Verification'
+    }
+  },
   // ==================== Setup Routes ====================
   {
     path: '/setup',
@@ -782,6 +792,14 @@ router.beforeEach(async (to, _from, next) => {
   // 开始导航加载状态
   navigationLoading.startNavigation()
 
+  // The Cap frame is an isolated rendering surface. It does not need auth,
+  // settings, redirects, or route prefetching from the host application.
+  if (to.meta.capFrame === true) {
+    document.title = 'Verification'
+    next()
+    return
+  }
+
   const authStore = useAuthStore()
 
   // Restore auth state from localStorage on first navigation (page refresh)
@@ -975,6 +993,8 @@ router.beforeEach(async (to, _from, next) => {
 router.afterEach((to) => {
   // 结束导航加载状态
   navigationLoading.endNavigation()
+
+  if (to.meta.capFrame === true) return
 
   // 懒初始化预加载（首次导航时创建，传入 router 实例）
   if (!routePrefetch) {

@@ -51,6 +51,10 @@ const (
 	JsDelivrCDNDomain = "https://cdn.jsdelivr.net"
 	// CapWasmEvalSource 只允许 WebAssembly 编译，不放开普通 JavaScript eval。
 	CapWasmEvalSource = "'wasm-unsafe-eval'"
+	// CapInstrumentationEvalSource is required by Cap's generated instrumentation
+	// program. It is added only to the isolated /cap-frame document.
+	CapInstrumentationEvalSource = "'unsafe-eval'"
+	CapFramePath                 = "/cap-frame"
 )
 
 var requiredCSPDirectiveValues = []struct {
@@ -133,8 +137,21 @@ func SecurityHeaders(cfg config.CSPConfig, getFrameSrcOrigins func() []string) g
 			}
 		}
 
+		isCapFrame := isCapFrameRoutePath(c)
+		if isCapFrame {
+			// Cap instrumentation currently evaluates generated JavaScript. Keep
+			// that permission out of the main SPA and grant it only to the
+			// same-origin frame dedicated to the widget.
+			finalPolicy = addToDirective(finalPolicy, "script-src", CapInstrumentationEvalSource)
+			finalPolicy = replaceDirective(finalPolicy, "frame-ancestors", "'self'")
+		}
+
 		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("X-Frame-Options", "DENY")
+		if isCapFrame {
+			c.Header("X-Frame-Options", "SAMEORIGIN")
+		} else {
+			c.Header("X-Frame-Options", "DENY")
+		}
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		if isAPIRoutePath(c) {
 			c.Next()
@@ -155,6 +172,10 @@ func SecurityHeaders(cfg config.CSPConfig, getFrameSrcOrigins func() []string) g
 		}
 		c.Next()
 	}
+}
+
+func isCapFrameRoutePath(c *gin.Context) bool {
+	return c != nil && c.Request != nil && c.Request.URL != nil && c.Request.URL.Path == CapFramePath
 }
 
 func isAPIRoutePath(c *gin.Context) bool {
@@ -216,6 +237,19 @@ func addToDirective(policy, directive, value string) string {
 		trimmed += ";"
 	}
 	return trimmed + " " + newCSPDirective(directive, value)
+}
+
+func replaceDirective(policy, directive string, values ...string) string {
+	parts := strings.Split(policy, ";")
+	replacement := directive + " " + strings.Join(values, " ")
+	for i, part := range parts {
+		fields := strings.Fields(strings.TrimSpace(part))
+		if len(fields) > 0 && fields[0] == directive {
+			parts[i] = replacement
+			return strings.Join(parts, ";")
+		}
+	}
+	return addToDirective(policy, directive, strings.Join(values, " "))
 }
 
 func cspDirectiveEnd(policy, directive string) (int, bool) {
