@@ -55,7 +55,7 @@ export default {
       searchGroups: '搜索分组', noGroups: '没有匹配分组', missingGroups: '配置中包含已删除的分组 ID', selectedCount: '已选择 {count} 个分组',
       scanners: 'Qwen3Guard 输入风险分类', workerCount: 'Worker 数量', queueCapacity: '持久队列容量', strategy: '节点策略', strategyHint: '按配置顺序优先尝试，必要时故障切换。',
     },
-    saveBar: { enabled: '启用提示词审计', blocking: '同步阻止', blockingLatestTurnOnly: '仅审最新输入和上一轮输出', storePass: '保存安全事件', dirty: '有未保存的更改', synced: '配置已同步' },
+    saveBar: { enabled: '启用提示词审计', blocking: '同步阻止', blockingLatestTurnOnly: '仅审最新输入和上一轮输出', storePass: '保存全部事件', retentionDays: '保留天数', dirty: '有未保存的更改', synced: '配置已同步' },
     blockingConfirm: {
       title: '开启同步阻止？',
       message: '适用请求会在账号选择、计费和访问上游之前等待 Guard。命中 Block、Guard 不可用或响应非法时，请求都不会访问上游。',
@@ -72,7 +72,7 @@ export default {
       filterDeletePreviewAction: '获取删除预览', filterDeletePreviewing: '正在生成预览…', filterDeleteNeedPreview: '可直接确认删除；如需提前查看匹配数量，可先获取删除预览。',
       filterDeleteConfirmInvalidRange: '请先选择有效的删除时间范围（自定义范围需开始早于结束）。', filterDeleteConfirmNoMatches: '当前筛选匹配 0 条事件，没有可删除的内容。',
       selectAll: '选择当前页全部事件', selectEvent: '选择事件 {id}', time: '时间', identity: '用户 / 邮箱 / API Key', user: '用户名', email: '用户邮箱', apiKey: 'API Key 名称', group: '分组', route: '入口 / 模型', result: '判定 / 风险', preview: '脱敏预览', empty: '没有符合条件的事件。',
-      passEventsDisabled: '当前未开启“保存安全事件”：安全请求仍会完成审计，但不会出现在事件列表中；Flag 和 Critical 风险事件仍会保存。', openConfiguration: '前往配置',
+      passEventsDisabled: '提示词审计事件保存策略已迁移为全量保存。', openConfiguration: '前往配置',
       detailTitle: '提示词审计事件详情', tabs: { summary: '审计摘要', risks: '具体风险', technical: '技术信息' },
       promptFull: '完整提示词（未脱敏）',
       promptFullHint: '完整提示词已随事件入库，仅供管理员复核触发内容；请按敏感数据妥善处理，切勿外泄。',
@@ -94,7 +94,7 @@ export default {
       loadConfig: '无法加载提示词审计配置。', loadRuntime: '无法加载提示词审计运行态。', loadGroups: '无法加载分组列表。', loadEvents: '无法加载审计事件。', loadDetail: '无法加载事件详情。', saveConfig: '配置保存失败。', probe: '节点探测失败。', delete: '事件删除失败。', previewDelete: '无法生成删除预览，请检查时间范围。', deleteConfirmation: '删除确认无效或已过期，请重新预览。',
       prompt_audit_config_conflict: '配置已被其他管理员更新。请重新加载服务端配置，再决定如何合并本地草稿。',
       prompt_audit_encryption_key_required: '未配置固定加密密钥，审计节点 API Key 将在服务重启后失效。请先设置 TOTP_ENCRYPTION_KEY 环境变量并重启服务。',
-      prompt_guard_requires_audit_enabled: '开启同步阻止前必须先启用提示词审计。', prompt_audit_invalid_endpoint: '审计节点配置无效。', prompt_audit_endpoint_required: '启用审计前至少需要一个启用节点。', prompt_audit_groups_required: '指定分组模式至少需要选择一个分组。', prompt_audit_scanners_required: '至少需要启用一个风险分类。',
+      prompt_guard_requires_audit_enabled: '开启同步阻止前必须先启用提示词审计。', prompt_audit_invalid_endpoint: '审计节点配置无效。', prompt_audit_endpoint_required: '启用审计前至少需要一个启用节点。', prompt_audit_groups_required: '指定分组模式至少需要选择一个分组。', prompt_audit_scanners_required: '至少需要启用一个风险分类。', prompt_audit_invalid_event_retention: '事件保留天数需在 1 到 3650 天之间。',
     },
   },
 }

@@ -55,7 +55,7 @@ export default {
       searchGroups: 'Search groups', noGroups: 'No matching groups', missingGroups: 'Configured IDs for groups that no longer exist', selectedCount: '{count} groups selected',
       scanners: 'Qwen3Guard input-risk categories', workerCount: 'Worker count', queueCapacity: 'Persistent queue capacity', strategy: 'Node strategy', strategyHint: 'Try nodes in configuration order and fail over when allowed.',
     },
-    saveBar: { enabled: 'Enable prompt audit', blocking: 'Synchronous blocking', blockingLatestTurnOnly: 'Only latest input and prior output', storePass: 'Store safe events', dirty: 'Unsaved changes', synced: 'Configuration synced' },
+    saveBar: { enabled: 'Enable prompt audit', blocking: 'Synchronous blocking', blockingLatestTurnOnly: 'Only latest input and prior output', storePass: 'Store all events', retentionDays: 'Retention days', dirty: 'Unsaved changes', synced: 'Configuration synced' },
     blockingConfirm: {
       title: 'Enable synchronous blocking?',
       message: 'Applicable requests wait for Guard before account selection, billing, or upstream access. Block, unavailable Guard, and invalid responses all prevent upstream access.',
@@ -72,7 +72,7 @@ export default {
       filterDeletePreviewAction: 'Generate delete preview', filterDeletePreviewing: 'Generating preview…', filterDeleteNeedPreview: 'You can delete directly, or generate a preview first to see the match count.',
       filterDeleteConfirmInvalidRange: 'Select a valid deletion time range first (a custom range needs a start before the end).', filterDeleteConfirmNoMatches: 'The current filters matched 0 events, so there is nothing to delete.',
       selectAll: 'Select all events on this page', selectEvent: 'Select event {id}', time: 'Time', identity: 'User / email / API Key', user: 'Username', email: 'User email', apiKey: 'API Key name', group: 'Group', route: 'Endpoint / model', result: 'Decision / risk', preview: 'Redacted preview', empty: 'No matching events.',
-      passEventsDisabled: '“Store safe events” is off. Safe requests are still audited but do not appear in this list; Flag and Critical risk events are still stored.', openConfiguration: 'Open configuration',
+      passEventsDisabled: 'Prompt Audit event retention is now always enabled for complete request review.', openConfiguration: 'Open configuration',
       detailTitle: 'Prompt audit event details', tabs: { summary: 'Audit summary', risks: 'Specific risks', technical: 'Technical details' },
       promptFull: 'Full prompt (unredacted)',
       promptFullHint: 'The full prompt is stored with this event for admin review only. Treat it as sensitive data and do not share it.',
@@ -94,7 +94,7 @@ export default {
       loadConfig: 'Unable to load Prompt Audit configuration.', loadRuntime: 'Unable to load Prompt Audit runtime.', loadGroups: 'Unable to load groups.', loadEvents: 'Unable to load audit events.', loadDetail: 'Unable to load event details.', saveConfig: 'Unable to save the configuration.', probe: 'Node probe failed.', delete: 'Unable to delete events.', previewDelete: 'Unable to create a deletion preview. Check the time range.', deleteConfirmation: 'The deletion confirmation is invalid or expired. Preview again.',
       prompt_audit_config_conflict: 'Another administrator updated this configuration. Reload the server version before deciding how to merge your draft.',
       prompt_audit_encryption_key_required: 'No fixed encryption key is configured, so audit node API Keys would be lost on restart. Set the TOTP_ENCRYPTION_KEY environment variable and restart the service first.',
-      prompt_guard_requires_audit_enabled: 'Enable Prompt Audit before synchronous blocking.', prompt_audit_invalid_endpoint: 'The audit node configuration is invalid.', prompt_audit_endpoint_required: 'Enable at least one audit node before enabling Prompt Audit.', prompt_audit_groups_required: 'Select at least one group in selected-group mode.', prompt_audit_scanners_required: 'Enable at least one risk category.',
+      prompt_guard_requires_audit_enabled: 'Enable Prompt Audit before synchronous blocking.', prompt_audit_invalid_endpoint: 'The audit node configuration is invalid.', prompt_audit_endpoint_required: 'Enable at least one audit node before enabling Prompt Audit.', prompt_audit_groups_required: 'Select at least one group in selected-group mode.', prompt_audit_scanners_required: 'Enable at least one risk category.', prompt_audit_invalid_event_retention: 'Event retention must be between 1 and 3650 days.',
     },
   },
 }

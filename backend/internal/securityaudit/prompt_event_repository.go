@@ -60,6 +60,63 @@ type EventRepository interface {
 	DeleteEventsByFilter(ctx context.Context, filter EventFilter, snapshotMaxID int64, batchSize int) (*DeleteResult, error)
 }
 
+// DeleteEventsBefore removes expired events in bounded batches and cleans up
+// their now-unreferenced jobs. It is separate from admin filter deletion.
+func (r *PostgreSQLRepository) DeleteEventsBefore(ctx context.Context, cutoff time.Time, batchSize int) (*DeleteResult, error) {
+	if r == nil || r.db == nil {
+		return nil, errors.New("prompt audit database unavailable")
+	}
+	if batchSize < 1 || batchSize > 1000 {
+		batchSize = 200
+	}
+	total := &DeleteResult{}
+	jobSet := map[int64]struct{}{}
+	for {
+		tx, err := r.db.BeginTx(ctx, nil)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := tx.QueryContext(ctx, `
+			WITH selected AS (
+				SELECT id FROM prompt_audit_events WHERE created_at < $1
+				ORDER BY id LIMIT $2 FOR UPDATE SKIP LOCKED
+			), deleted AS (
+				DELETE FROM prompt_audit_events e USING selected s
+				WHERE e.id=s.id RETURNING e.job_id
+			) SELECT job_id FROM deleted`, cutoff.UTC(), batchSize)
+		if err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
+		jobIDs, err := scanReturnedJobIDs(rows)
+		if err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
+		deletedJobs, err := deleteOrphanJobs(ctx, tx, jobIDs)
+		if err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		total.DeletedEvents += int64(len(jobIDs))
+		total.DeletedJobs += deletedJobs
+		for _, id := range jobIDs {
+			jobSet[id] = struct{}{}
+		}
+		if len(jobIDs) < batchSize {
+			break
+		}
+	}
+	for id := range jobSet {
+		total.JobIDs = append(total.JobIDs, id)
+	}
+	total.JobIDs = canonicalInt64s(total.JobIDs)
+	return total, nil
+}
+
 func (r *PostgreSQLRepository) ListEvents(ctx context.Context, filter EventFilter, page, pageSize int) (*EventPage, error) {
 	if page < 1 {
 		page = 1

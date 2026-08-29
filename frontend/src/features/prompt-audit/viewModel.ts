@@ -64,6 +64,7 @@ export function buildUpdateRequest(draft: PromptAuditDraft): PromptAuditUpdateRe
     blocking_enabled: draft.enabled && draft.blocking_enabled,
     blocking_latest_turn_only: draft.blocking_latest_turn_only,
     store_pass_events: draft.store_pass_events,
+    event_retention_days: Math.max(1, Math.min(3650, Number(draft.event_retention_days || 7))),
     strategy: 'priority',
     worker_count: Number(draft.worker_count),
     queue_capacity: Number(draft.queue_capacity),

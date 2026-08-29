@@ -19,9 +19,10 @@ import (
 )
 
 type activeConfigSnapshot struct {
-	storage  storageConfig
-	active   ActiveConfig
-	loadedAt time.Time
+	storage                  storageConfig
+	active                   ActiveConfig
+	loadedAt                 time.Time
+	legacyRiskControlEnabled bool
 }
 
 type ConfigManager struct {
@@ -116,7 +117,8 @@ func (m *ConfigManager) Reload(ctx context.Context) error {
 		m.markUntrustedIfNoActiveSnapshot()
 		return err
 	}
-	m.observeExpectedState(values[SettingKeyPromptAuditConfig], values[SettingKeyRiskControl] == "true")
+	m.observeExpectedState(values[SettingKeyPromptAuditConfig], true)
+	legacyRiskControlEnabled := values[SettingKeyRiskControl] == "true"
 	storage, err := ParseStorageConfig(values[SettingKeyPromptAuditConfig])
 	if err != nil {
 		m.recordLoadError(err)
@@ -124,8 +126,8 @@ func (m *ConfigManager) Reload(ctx context.Context) error {
 		return err
 	}
 	m.expected.Store(storage.ConfigVersion)
-	m.expectedBlocking.Store(values[SettingKeyRiskControl] == "true" && storage.Enabled && storage.BlockingEnabled)
-	active, err := ActiveFromStorage(storage, values[SettingKeyRiskControl] == "true", m.encryptor)
+	m.expectedBlocking.Store(storage.Enabled && storage.BlockingEnabled)
+	active, err := ActiveFromStorage(storage, true, m.encryptor)
 	if err != nil {
 		m.recordLoadError(err)
 		// expectedBlocking may already require fail-closed via BlockingActivationDegraded.
@@ -134,13 +136,13 @@ func (m *ConfigManager) Reload(ctx context.Context) error {
 	}
 	now := m.clock.Now()
 	previous := m.snapshot.Load()
-	m.snapshot.Store(&activeConfigSnapshot{storage: cloneStorageConfig(storage), active: cloneActiveConfig(active), loadedAt: now})
+	m.snapshot.Store(&activeConfigSnapshot{storage: cloneStorageConfig(storage), active: cloneActiveConfig(active), loadedAt: now, legacyRiskControlEnabled: legacyRiskControlEnabled})
 	m.configUntrusted.Store(false)
 	recovered := m.clearLoadError()
 	m.logInvalidTokenEndpoints(previous, active)
 	// refreshLoop calls Reload every 5s, so logging every successful load turns
 	// config_loaded into a heartbeat that buries real config changes.
-	if recovered || shouldLogConfigLoaded(previous, storage, active) {
+	if recovered || shouldLogConfigLoaded(previous, storage, legacyRiskControlEnabled) {
 		LogInfo(EventConfigLoaded, map[string]any{
 			"config_version": storage.ConfigVersion, "status": "loaded",
 		})
@@ -149,13 +151,12 @@ func (m *ConfigManager) Reload(ctx context.Context) error {
 }
 
 // shouldLogConfigLoaded reports whether a successful reload carries news: the
-// first snapshot, a new config version (every admin save bumps it under the
-// advisory lock in UpdateConfig) or a flip of the global risk control gate,
-// which lives in its own setting and so leaves the version untouched.
-func shouldLogConfigLoaded(previous *activeConfigSnapshot, storage storageConfig, active ActiveConfig) bool {
+// first snapshot or a new config version (every admin save bumps it under the
+// advisory lock in UpdateConfig).
+func shouldLogConfigLoaded(previous *activeConfigSnapshot, storage storageConfig, legacyRiskControlEnabled bool) bool {
 	return previous == nil ||
 		previous.storage.ConfigVersion != storage.ConfigVersion ||
-		previous.active.RiskControlEnabled != active.RiskControlEnabled
+		previous.legacyRiskControlEnabled != legacyRiskControlEnabled
 }
 
 // logInvalidTokenEndpoints warns once per change (not on every 5s refresh)
@@ -254,7 +255,7 @@ func (m *ConfigManager) Public() (PublicConfig, error) {
 	if snapshot == nil {
 		return PublicConfig{}, infraerrors.ServiceUnavailable(ErrorCodeConfigUnavailable, "提示词审计配置暂不可用")
 	}
-	return PublicFromStorage(cloneStorageConfig(snapshot.storage), snapshot.active.RiskControlEnabled, snapshot.active.InvalidTokenEndpointIDs()), nil
+	return PublicFromStorage(cloneStorageConfig(snapshot.storage), true, snapshot.active.InvalidTokenEndpointIDs()), nil
 }
 
 func (m *ConfigManager) Save(ctx context.Context, req UpdateConfigRequest, actorID int64) (PublicConfig, error) {
@@ -308,18 +309,12 @@ func (m *ConfigManager) Save(ctx context.Context, req UpdateConfigRequest, actor
 	if err := tx.Commit(); err != nil {
 		return PublicConfig{}, err
 	}
-	// Install the snapshot with the current global gate, not merely the value
-	// cached when this process last reloaded Prompt Audit configuration.
-	riskControlEnabled := m.currentRiskControlEnabled()
-	if values, getErr := m.settings.GetMultiple(ctx, []string{SettingKeyRiskControl}); getErr == nil {
-		riskControlEnabled = values[SettingKeyRiskControl] == "true"
-	}
-	active, err := ActiveFromStorage(next, riskControlEnabled, m.encryptor)
+	active, err := ActiveFromStorage(next, true, m.encryptor)
 	if err != nil {
 		return PublicConfig{}, err
 	}
 	m.expected.Store(next.ConfigVersion)
-	m.expectedBlocking.Store(active.RiskControlEnabled && next.Enabled && next.BlockingEnabled)
+	m.expectedBlocking.Store(next.Enabled && next.BlockingEnabled)
 	previous := m.snapshot.Load()
 	m.snapshot.Store(&activeConfigSnapshot{storage: cloneStorageConfig(next), active: cloneActiveConfig(active), loadedAt: m.clock.Now()})
 	// A successful admin save installs a trustworthy snapshot; clear any prior
@@ -337,7 +332,7 @@ func (m *ConfigManager) Save(ctx context.Context, req UpdateConfigRequest, actor
 			})
 		}
 	}
-	return PublicFromStorage(next, active.RiskControlEnabled, active.InvalidTokenEndpointIDs()), nil
+	return PublicFromStorage(next, true, active.InvalidTokenEndpointIDs()), nil
 }
 
 func (m *ConfigManager) buildNextStorage(current storageConfig, req UpdateConfigRequest, actorID int64) (storageConfig, error) {
@@ -349,7 +344,7 @@ func (m *ConfigManager) buildNextStorage(current storageConfig, req UpdateConfig
 		currentByID[endpoint.ID] = endpoint
 	}
 	next := storageConfig{
-		Enabled: req.Enabled, BlockingEnabled: req.BlockingEnabled, BlockingLatestTurnOnly: req.BlockingLatestTurnOnly, StorePassEvents: req.StorePassEvents,
+		Enabled: req.Enabled, BlockingEnabled: req.BlockingEnabled, BlockingLatestTurnOnly: req.BlockingLatestTurnOnly, StorePassEvents: true, EventRetentionDays: req.EventRetentionDays,
 		Strategy: strings.TrimSpace(req.Strategy), WorkerCount: req.WorkerCount,
 		QueueCapacity: req.QueueCapacity, Scanners: append([]string(nil), req.Scanners...),
 		AllGroups: req.AllGroups, GroupIDs: append([]int64(nil), req.GroupIDs...),
@@ -414,13 +409,6 @@ func (m *ConfigManager) RuntimeState() (expected int64, active int64, loadedAt *
 func (m *ConfigManager) Encrypt(value string) (string, error) { return m.encryptor.Encrypt(value) }
 func (m *ConfigManager) Decrypt(value string) (string, error) { return m.encryptor.Decrypt(value) }
 
-func (m *ConfigManager) currentRiskControlEnabled() bool {
-	if snapshot := m.snapshot.Load(); snapshot != nil {
-		return snapshot.active.RiskControlEnabled
-	}
-	return false
-}
-
 func (m *ConfigManager) observeExpectedState(raw string, riskControlEnabled bool) {
 	if m == nil {
 		return
@@ -442,6 +430,7 @@ func (m *ConfigManager) observeExpectedState(raw string, riskControlEnabled bool
 		intent.ConfigVersion = 1
 	}
 	m.expected.Store(intent.ConfigVersion)
+	// Reload passes true here. The parameter is retained for old callers/tests.
 	m.expectedBlocking.Store(riskControlEnabled && intent.Enabled && intent.BlockingEnabled)
 }
 

@@ -96,7 +96,11 @@
           <SaveToggle :label="t('admin.promptAudit.saveBar.enabled')" :model-value="draft.enabled" data-test="enabled-toggle" @update:model-value="setEnabled" />
           <SaveToggle :label="t('admin.promptAudit.saveBar.blocking')" :model-value="draft.blocking_enabled" :disabled="!draft.enabled" data-test="blocking-toggle" @update:model-value="setBlocking" />
           <SaveToggle :label="t('admin.promptAudit.saveBar.blockingLatestTurnOnly')" :model-value="draft.blocking_latest_turn_only" :disabled="!draft.enabled || !draft.blocking_enabled" data-test="blocking-latest-turn-only-toggle" @update:model-value="replaceDraft({ ...draft!, blocking_latest_turn_only: $event })" />
-          <SaveToggle :label="t('admin.promptAudit.saveBar.storePass')" :model-value="draft.store_pass_events" data-test="store-pass-toggle" @update:model-value="replaceDraft({ ...draft!, store_pass_events: $event })" />
+          <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <span>{{ t('admin.promptAudit.saveBar.retentionDays') }}</span>
+            <input v-model.number="draft.event_retention_days" type="number" min="1" max="3650" class="input h-8 w-20 px-2 text-sm" data-test="retention-days" />
+          </label>
+          <SaveToggle :label="t('admin.promptAudit.saveBar.storePass')" :model-value="true" :disabled="true" data-test="store-pass-toggle" />
         </div>
         <div class="flex items-center gap-3">
           <span class="text-sm" :class="dirty ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-dark-400'">

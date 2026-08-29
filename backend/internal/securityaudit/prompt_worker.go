@@ -33,6 +33,10 @@ type Runner struct {
 	wg     sync.WaitGroup
 }
 
+type expiringEventRepository interface {
+	DeleteEventsBefore(context.Context, time.Time, int) (*DeleteResult, error)
+}
+
 func NewRunner(config ConfigStore, repo JobRepository, payload PayloadStore, scanner PromptScanner, metrics Metrics) *Runner {
 	return &Runner{config: config, repo: repo, payload: payload, scanner: scanner, metrics: metrics, clock: realClock{}}
 }
@@ -58,6 +62,8 @@ func (r *Runner) Start(ctx context.Context) error {
 	}
 	r.wg.Add(1)
 	go r.reclaimer(runCtx)
+	r.wg.Add(1)
+	go r.retentionLoop(runCtx)
 	return nil
 }
 
@@ -94,7 +100,7 @@ func (r *Runner) worker(ctx context.Context, workerID int) {
 		case <-ticker.C:
 			r.runtime.heartbeatNS.Store(r.clock.Now().UnixNano())
 			cfg, ok := r.config.Active()
-			if !ok || !cfg.RiskControlEnabled || !cfg.Enabled || workerID >= cfg.WorkerCount {
+			if !ok || !cfg.Enabled || workerID >= cfg.WorkerCount {
 				continue
 			}
 			for {
@@ -189,7 +195,10 @@ func (r *Runner) processJob(ctx context.Context, workerID int, cfg ActiveConfig,
 		"action": aggregated.Action, "chunk_total": aggregated.ChunkTotal,
 		"latency_ms": aggregated.LatencyMS, "guard_endpoint_id": aggregated.GuardEndpointID, "status": "completed",
 	}))
-	event, err := r.repo.Complete(ctx, job, aggregated, cfg.StorePassEvents)
+	// New configurations always retain safe results. The retention-day check
+	// keeps older snapshots compatible during migration.
+	storePass := cfg.StorePassEvents || cfg.EventRetentionDays > 0
+	event, err := r.repo.Complete(ctx, job, aggregated, storePass)
 	if err != nil {
 		return err
 	}
@@ -276,6 +285,40 @@ func (r *Runner) reclaimer(ctx context.Context) {
 				LogWarn(EventProcessingReclaimed, map[string]any{"reclaimed_total": count, "status": "reclaimed"})
 			}
 		}
+	}
+}
+
+func (r *Runner) retentionLoop(ctx context.Context) {
+	defer r.wg.Done()
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	r.cleanupExpiredEvents(ctx)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.cleanupExpiredEvents(ctx)
+		}
+	}
+}
+
+func (r *Runner) cleanupExpiredEvents(ctx context.Context) {
+	cfg, ok := r.config.Active()
+	if !ok || cfg.EventRetentionDays <= 0 {
+		return
+	}
+	expiring, ok := r.repo.(expiringEventRepository)
+	if !ok {
+		return
+	}
+	result, err := expiring.DeleteEventsBefore(ctx, r.clock.Now().Add(-time.Duration(cfg.EventRetentionDays)*24*time.Hour), 200)
+	if err != nil {
+		r.setLastError("retention_cleanup_failed", "prompt audit retention cleanup failed")
+		return
+	}
+	if result != nil && result.DeletedEvents > 0 {
+		LogInfo(EventEventsDeleted, map[string]any{"deleted_events": result.DeletedEvents, "status": "retention_cleanup"})
 	}
 }
 
