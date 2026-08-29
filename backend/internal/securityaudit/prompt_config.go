@@ -314,8 +314,8 @@ func validateStorageConfig(cfg storageConfig) error {
 			enabled++
 		}
 	}
-	if cfg.Enabled && enabled == 0 {
-		return infraerrors.BadRequest("prompt_audit_endpoint_required", "启用提示词审计前至少需要启用一个审计节点")
+	if cfg.BlockingEnabled && enabled == 0 {
+		return infraerrors.BadRequest("prompt_audit_endpoint_required", "开启同步阻止前至少需要启用一个 AI 审计节点")
 	}
 	return nil
 }

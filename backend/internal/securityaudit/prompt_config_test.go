@@ -73,6 +73,17 @@ func TestConfigRejectsBlockingWithoutAudit(t *testing.T) {
 	require.Error(t, validateStorageConfig(storage))
 }
 
+func TestConfigAllowsRecordOnlyWithoutAIEndpoint(t *testing.T) {
+	storage := DefaultStorageConfig()
+	storage.Enabled = true
+	require.NoError(t, validateStorageConfig(storage))
+
+	storage.BlockingEnabled = true
+	err := validateStorageConfig(storage)
+	require.Error(t, err)
+	require.Equal(t, "prompt_audit_endpoint_required", infraerrors.Reason(err))
+}
+
 func TestPublicConfigNeverMarshalsToken(t *testing.T) {
 	storage := DefaultStorageConfig()
 	storage.Endpoints = []StorageEndpoint{{ID: "one", Name: "One", Protocol: "openai_compatible", BaseURL: "http://127.0.0.1:8080", Model: DefaultGuardModel, TokenCiphertext: "GUARD_TOKEN_CANARY_SECRET", TimeoutMS: 1000, InputLimit: 1000, Enabled: true}}

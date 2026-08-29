@@ -89,12 +89,27 @@ type fakeJobRepository struct {
 	recordBlockingSnapshot PromptSnapshot
 	recordBlockingResult   *NormalizedResult
 	recordBlockingErr      error
+	recordObservedCalls    int
+	recordObservedSnapshot PromptSnapshot
+	recordObservedErr      error
 }
 
 func (r *fakeJobRepository) record(value string) {
 	if r.trace != nil {
 		*r.trace = append(*r.trace, value)
 	}
+}
+
+func (r *fakeJobRepository) RecordObserved(_ context.Context, snapshot PromptSnapshot, _ int64) (*Event, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.record("record_observed")
+	r.recordObservedCalls++
+	r.recordObservedSnapshot = snapshot
+	if r.recordObservedErr != nil {
+		return nil, r.recordObservedErr
+	}
+	return &Event{ID: 98, JobID: 97, Snapshot: snapshot}, nil
 }
 
 func (r *fakeJobRepository) CreateStagingWithCapacity(_ context.Context, snapshot PromptSnapshot, _ int64, _, _ int) (*Job, error) {
@@ -244,6 +259,18 @@ func asyncRequest() Request {
 }
 
 func TestEnqueuerStagingPayloadPublishProtocolAndFailureCleanup(t *testing.T) {
+	t.Run("record-only mode persists directly without an AI endpoint or payload store", func(t *testing.T) {
+		cfg := asyncConfig()
+		cfg.Endpoints = nil
+		repo := &fakeJobRepository{}
+		metrics := NewAtomicMetrics()
+		require.NoError(t, NewEnqueuer(&fakeConfigStore{cfg: cfg, active: true}, repo, nil, metrics).Enqueue(context.Background(), asyncRequest()))
+		require.Equal(t, 1, repo.recordObservedCalls)
+		require.Equal(t, "payload canary text", repo.recordObservedSnapshot.FullPrompt)
+		require.Empty(t, repo.recordObservedSnapshot.ScanText)
+		require.Equal(t, AuditMetricsSnapshot{Enqueued: 1}, metrics.AuditSnapshot())
+	})
+
 	t.Run("success", func(t *testing.T) {
 		trace := []string{}
 		repo := &fakeJobRepository{trace: &trace, createJob: &Job{ID: 41}}

@@ -87,7 +87,7 @@
               <p class="mt-1 text-xs text-gray-500">{{ event.snapshot.model }} · {{ event.snapshot.protocol }} · {{ event.snapshot.stage || 'http' }}</p>
             </td>
             <td class="px-3 py-3">
-              <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="decisionClass(event.decision)">{{ formatDecisionRisk(event.decision, event.risk_level) }}</span>
+              <span class="rounded-full px-2 py-0.5 text-xs font-medium" :class="decisionClass(event.decision, isRecordOnly(event))">{{ formatDecisionRisk(event) }}</span>
               <p class="mt-2 max-w-48 truncate text-xs text-gray-500" :title="formatCategories(event.categories)">{{ formatCategories(event.categories) }}</p>
             </td>
             <td class="max-w-xs px-3 py-3"><p class="line-clamp-2 break-words text-gray-600 dark:text-dark-300">{{ event.snapshot.redacted_preview || '—' }}</p></td>
@@ -183,7 +183,8 @@ function toggleAll() {
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat(locale.value, { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(value))
 }
-function decisionClass(decision: string): string {
+function decisionClass(decision: string, recordOnly = false): string {
+  if (recordOnly) return 'bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300'
   if (decision === 'critical') return 'bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300'
   if (decision === 'flag') return 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300'
   return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
@@ -202,8 +203,12 @@ function translateCategory(category: string): string {
     ? t(`admin.promptAudit.scanners.${category}`)
     : category
 }
-function formatDecisionRisk(decision: string, riskLevel: string): string {
-  return `${translateDecision(decision)} · ${translateRiskLevel(riskLevel)}`
+function isRecordOnly(event: PromptAuditEvent): boolean {
+  return event.scanner_backend === 'record-only'
+}
+function formatDecisionRisk(event: PromptAuditEvent): string {
+  if (isRecordOnly(event)) return `${t('admin.promptAudit.decisions.recorded')} · ${t('admin.promptAudit.riskLevels.unassessed')}`
+  return `${translateDecision(event.decision)} · ${translateRiskLevel(event.risk_level)}`
 }
 function formatCategories(categories: string[]): string {
   if (!categories.length) return '—'

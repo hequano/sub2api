@@ -107,9 +107,15 @@ func (s *PromptService) EffectiveMode() Mode {
 	return s.config.EffectiveMode()
 }
 
-func (s *PromptService) Enqueue(_ context.Context, req Request) error {
+func (s *PromptService) Enqueue(ctx context.Context, req Request) error {
 	if s == nil || s.enqueuer == nil || s.EffectiveMode() != ModeAsync {
 		return nil
+	}
+	// Record-only mode writes through before returning so it cannot lose rows to
+	// the optional AI pipeline's local concurrency slot, Redis, or worker queue.
+	// Coordinator still treats persistence errors as best-effort for availability.
+	if cfg, ok := s.config.Active(); ok && len(cfg.EnabledEndpoints()) == 0 {
+		return s.enqueuer.Enqueue(ctx, req.Clone())
 	}
 	select {
 	case s.enqueueSlots <- struct{}{}:

@@ -21,7 +21,7 @@ func NewEnqueuer(config ConfigStore, repo JobRepository, payload PayloadStore, m
 }
 
 func (e *Enqueuer) Enqueue(ctx context.Context, req Request) error {
-	if e == nil || e.config == nil || e.repo == nil || e.payload == nil {
+	if e == nil || e.config == nil || e.repo == nil {
 		return errors.New("prompt audit enqueuer unavailable")
 	}
 	cfg, ok := e.config.Active()
@@ -35,11 +35,6 @@ func (e *Enqueuer) Enqueue(ctx context.Context, req Request) error {
 		LogInfo(EventEnqueueSkipped, mergeLogFields(baseFields, map[string]any{"status": "skipped", "error_code": "group_out_of_scope"}))
 		return nil
 	}
-	if len(cfg.EnabledEndpoints()) == 0 {
-		e.recordDropped()
-		LogWarn(EventEnqueueDropped, mergeLogFields(baseFields, map[string]any{"status": "dropped", "error_code": "no_enabled_endpoint"}))
-		return nil
-	}
 	snapshot, err := ExtractPromptSnapshot(req)
 	if errors.Is(err, ErrNoPromptText) {
 		LogInfo(EventEnqueueSkipped, mergeLogFields(baseFields, map[string]any{"status": "skipped", "error_code": "no_user_text"}))
@@ -49,6 +44,24 @@ func (e *Enqueuer) Enqueue(ctx context.Context, req Request) error {
 		e.recordDropped()
 		LogWarn(EventEnqueueDropped, mergeLogFields(baseFields, map[string]any{"status": "dropped", "error_code": "snapshot_invalid"}))
 		return nil
+	}
+	if len(cfg.EnabledEndpoints()) == 0 {
+		event, recordErr := e.repo.RecordObserved(ctx, snapshot.Redacted(), cfg.ConfigVersion)
+		if recordErr != nil {
+			e.recordDropped()
+			LogWarn(EventEnqueueDropped, mergeLogFields(baseFields, map[string]any{"status": "dropped", "error_code": "database_unavailable"}))
+			return recordErr
+		}
+		if e.metrics != nil {
+			e.metrics.IncEnqueued()
+		}
+		LogInfo(EventProcessed, mergeLogFields(baseFields, map[string]any{
+			"job_id": event.JobID, "event_id": event.ID, "status": "recorded", "audit_mode": "record_only",
+		}))
+		return nil
+	}
+	if e.payload == nil {
+		return errors.New("prompt audit payload store unavailable")
 	}
 	job, err := e.repo.CreateStagingWithCapacity(ctx, snapshot.Redacted(), cfg.ConfigVersion, 3, cfg.QueueCapacity)
 	if err != nil {

@@ -68,6 +68,18 @@ func TestPromptServiceStartReportsDependencyFailureWithoutPanic(t *testing.T) {
 	require.NoError(t, service.Shutdown(ctx))
 }
 
+func TestPromptServiceRecordOnlyWritesThroughWithoutBackgroundQueue(t *testing.T) {
+	cfg := asyncConfig()
+	cfg.Endpoints = nil
+	store := &fakeConfigStore{active: true, cfg: cfg}
+	repo := &fakeJobRepository{}
+	service := &PromptService{config: store, enqueuer: NewEnqueuer(store, repo, nil)}
+
+	require.NoError(t, service.Enqueue(context.Background(), asyncRequest()))
+	require.Equal(t, 1, repo.recordObservedCalls)
+	require.Equal(t, "payload canary text", repo.recordObservedSnapshot.FullPrompt)
+}
+
 func TestPromptServiceBlockingLatestTurnOnlyUsesNarrowSnapshot(t *testing.T) {
 	seen := make([]string, 0, 2)
 	evaluator := newGuardEvaluator(PromptScannerFunc(func(_ context.Context, _ ActiveEndpoint, chunk string, _ []string) (*NormalizedResult, error) {

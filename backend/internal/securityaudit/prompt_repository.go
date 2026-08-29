@@ -64,6 +64,7 @@ type Event struct {
 }
 
 type JobRepository interface {
+	RecordObserved(ctx context.Context, snapshot PromptSnapshot, configVersion int64) (*Event, error)
 	CreateStagingWithCapacity(ctx context.Context, snapshot PromptSnapshot, configVersion int64, maxAttempts, capacity int) (*Job, error)
 	PublishQueued(ctx context.Context, jobID int64) error
 	MarkStagingFailed(ctx context.Context, jobID int64, code, message string) error
@@ -84,6 +85,38 @@ type PostgreSQLRepository struct {
 
 func NewPostgreSQLRepository(db *sql.DB) *PostgreSQLRepository {
 	return &PostgreSQLRepository{db: db, clock: realClock{}}
+}
+
+// RecordObserved persists a request without claiming that an AI model assessed
+// its safety. Existing event enums remain unchanged for schema compatibility;
+// scanner_backend and policy_id distinguish record-only rows in the API/UI.
+func (r *PostgreSQLRepository) RecordObserved(ctx context.Context, snapshot PromptSnapshot, configVersion int64) (*Event, error) {
+	if r == nil || r.db == nil {
+		return nil, errors.New("prompt audit database unavailable")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	job, err := insertJob(ctx, tx, snapshot.Redacted(), ModeAsync, configVersion, "done", 1)
+	if err != nil {
+		return nil, err
+	}
+	result := &NormalizedResult{
+		Decision: EventPass, RiskLevel: RiskLow, Action: ActionAllow,
+		Categories: []string{}, MatchedScanners: []string{},
+		ScannerScores: map[string]float64{}, ScannerEvidence: map[string]string{},
+		ScannerBackend: "record-only", PolicyID: "record-only",
+	}
+	event, err := insertEvent(ctx, tx, job.ID, snapshot.Redacted(), configVersion, result)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return event, nil
 }
 
 func (r *PostgreSQLRepository) CreateStagingWithCapacity(ctx context.Context, snapshot PromptSnapshot, configVersion int64, maxAttempts, capacity int) (*Job, error) {
