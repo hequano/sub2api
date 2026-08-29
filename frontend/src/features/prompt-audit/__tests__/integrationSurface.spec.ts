@@ -9,21 +9,20 @@ const here = dirname(fileURLToPath(import.meta.url))
 const read = (path: string) => readFileSync(resolve(here, path), 'utf8')
 
 describe('Prompt Audit integration surface', () => {
-  it('registers an admin and risk-control guarded route', () => {
+  it('registers an admin route independent from risk control', () => {
     const router = read('../../../router/index.ts')
     expect(router).toContain("path: '/admin/prompt-audit'")
     const route = router.slice(router.indexOf("path: '/admin/prompt-audit'"), router.indexOf("path: '/admin/usage'"))
     expect(route).toContain('requiresAuth: true')
     expect(route).toContain('requiresAdmin: true')
-    expect(route).toContain('requiresRiskControl: true')
+    expect(route).not.toContain('requiresRiskControl: true')
   })
 
-  it('keeps the legacy content moderation route and adds both pages under an expand-only security group', () => {
+  it('keeps Prompt Audit separate from the content moderation navigation entry', () => {
     const sidebar = read('../../../components/layout/AppSidebar.vue')
-    const group = sidebar.slice(sidebar.indexOf("path: '/admin/security-audit'"), sidebar.indexOf("path: '/admin/redeem'"))
-    expect(group).toContain('expandOnly: true')
-    expect(group).toContain("path: '/admin/risk-control'")
-    expect(group).toContain("path: '/admin/prompt-audit'")
+    expect(sidebar).not.toContain("path: '/admin/security-audit'")
+    expect(sidebar).toContain("{ path: '/admin/risk-control', label: t('nav.contentModeration')")
+    expect(sidebar).toContain("{ path: '/admin/prompt-audit', label: t('nav.promptAudit')")
   })
 
   it('keeps Prompt Audit locale trees symmetric and all operational controls named', () => {
